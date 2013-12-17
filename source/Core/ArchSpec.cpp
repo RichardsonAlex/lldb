@@ -81,6 +81,7 @@ static const CoreDefinition g_core_definitions[] =
     { eByteOrderLittle, 8, 4, 4, llvm::Triple::aarch64, ArchSpec::eCore_arm_arm64       , "arm64"     },
 
     { eByteOrderBig   , 8, 4, 4, llvm::Triple::mips64 , ArchSpec::eCore_mips64          , "mips64"    },
+    { eByteOrderBig   , 8, 4, 4, llvm::Triple::cheri  , ArchSpec::eCore_cheri           , "cheri"     },
     
     { eByteOrderBig   , 4, 4, 4, llvm::Triple::ppc    , ArchSpec::eCore_ppc_generic     , "ppc"       },
     { eByteOrderBig   , 4, 4, 4, llvm::Triple::ppc    , ArchSpec::eCore_ppc_ppc601      , "ppc601"    },
@@ -256,6 +257,7 @@ static const ArchDefinitionEntry g_elf_arch_entries[] =
     { ArchSpec::eCore_arm_generic     , llvm::ELF::EM_ARM    , LLDB_INVALID_CPUTYPE, 0xFFFFFFFFu, 0xFFFFFFFFu }, // ARM
     { ArchSpec::eCore_sparc9_generic  , llvm::ELF::EM_SPARCV9, LLDB_INVALID_CPUTYPE, 0xFFFFFFFFu, 0xFFFFFFFFu }, // SPARC V9
     { ArchSpec::eCore_x86_64_x86_64   , llvm::ELF::EM_X86_64 , LLDB_INVALID_CPUTYPE, 0xFFFFFFFFu, 0xFFFFFFFFu }, // AMD64
+    { ArchSpec::eCore_cheri           , llvm::ELF::EM_MIPS   , LLDB_INVALID_CPUTYPE, 0xFFFFFFFFu, 0xFFFFFFFFu }, // MIPS
     { ArchSpec::eCore_mips64          , llvm::ELF::EM_MIPS   , LLDB_INVALID_CPUTYPE, 0xFFFFFFFFu, 0xFFFFFFFFu }, // MIPS
     { ArchSpec::eCore_hexagon_generic , llvm::ELF::EM_HEXAGON, LLDB_INVALID_CPUTYPE, 0xFFFFFFFFu, 0xFFFFFFFFu }, // HEXAGON
     { ArchSpec::eCore_kalimba ,         llvm::ELF::EM_CSR_KALIMBA, LLDB_INVALID_CPUTYPE, 0xFFFFFFFFu, 0xFFFFFFFFu }  // KALIMBA

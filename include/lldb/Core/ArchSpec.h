@@ -66,6 +66,7 @@ public:
         eCore_arm_arm64,
         
         eCore_mips64,
+        eCore_cheri,
 
         eCore_ppc_generic,
         eCore_ppc_ppc601,

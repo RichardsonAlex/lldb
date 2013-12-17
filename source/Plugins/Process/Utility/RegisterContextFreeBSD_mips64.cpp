@@ -80,7 +80,8 @@ RegisterContextFreeBSD_mips64::GetGPRSize() const
 const RegisterInfo *
 RegisterContextFreeBSD_mips64::GetRegisterInfo() const
 {
-    assert (m_target_arch.GetCore() == ArchSpec::eCore_mips64);
+    assert (m_target_arch.GetCore() == ArchSpec::eCore_mips64 ||
+            m_target_arch.GetCore() == ArchSpec::eCore_cheri);
     return g_register_infos_mips64;
 }
 

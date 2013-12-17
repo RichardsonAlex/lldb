@@ -94,6 +94,7 @@ ThreadElfCore::CreateRegisterContextForFrame (StackFrame *frame)
             {
                 switch (arch.GetMachine())
                 {
+                    case llvm::Triple::cheri:
                     case llvm::Triple::mips64:
                         reg_interface = new RegisterContextFreeBSD_mips64(arch);
                         break;
@@ -135,6 +136,7 @@ ThreadElfCore::CreateRegisterContextForFrame (StackFrame *frame)
 
         switch (arch.GetMachine())
         {
+            case llvm::Triple::cheri:
             case llvm::Triple::mips64:
                 m_thread_reg_ctx_sp.reset(new RegisterContextCorePOSIX_mips64 (*this, reg_interface, m_gpregset_data, m_fpregset_data));
                 break;
