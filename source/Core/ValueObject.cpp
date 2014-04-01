@@ -1501,6 +1501,7 @@ ValueObject::GetValueAsSigned (int64_t fail_value, bool *success)
 // if any more "special cases" are added to ValueObject::DumpPrintableRepresentation() please keep
 // this call up to date by returning true for your new special cases. We will eventually move
 // to checking this call result before trying to display special cases
+// XXXEM: this still needs to be done for capability register support
 bool
 ValueObject::HasSpecialPrintableRepresentation(ValueObjectRepresentationStyle val_obj_display,
                                                Format custom_format)

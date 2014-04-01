@@ -398,7 +398,8 @@ enum {
     NT_FREEBSD_FPREGSET,
     NT_FREEBSD_PRPSINFO,
     NT_FREEBSD_THRMISC       = 7,
-    NT_FREEBSD_PROCSTAT_AUXV = 16
+    NT_FREEBSD_PROCSTAT_AUXV = 16,
+    NT_FREEBSD_CAPREGSET     = 20,
 };
 
 // Parse a FreeBSD NT_PRSTATUS note - see FreeBSD sys/procfs.h for details.
@@ -511,6 +512,9 @@ ProcessElfCore::ParseThreadContextsFromNoteSegment(const elf::ELFProgramHeader *
                     break;
                 case NT_FREEBSD_FPREGSET:
                     thread_data->fpregset = note_data;
+                    break;
+                case NT_FREEBSD_CAPREGSET:
+                    thread_data->capregset = note_data;
                     break;
                 case NT_FREEBSD_PRPSINFO:
                     have_prpsinfo = true;

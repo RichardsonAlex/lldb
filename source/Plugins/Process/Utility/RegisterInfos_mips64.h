@@ -20,6 +20,13 @@
     { #reg, alt, sizeof(((GPR*)NULL)->reg), GPR_OFFSET(reg), eEncodingUint, \
       eFormatHex, { kind1, kind2, kind3, kind4, gpr_##reg##_mips64 }, NULL, NULL }
 
+#define STRINGIFY(i) #i
+
+#define DEFINE_CR(i)                                                          \
+    { STRINGIFY(c)#i, NULL, 32, i * 32, eEncodingVector, eFormatCapability,   \
+      { LLDB_INVALID_REGNUM, LLDB_INVALID_REGNUM, LLDB_INVALID_REGNUM,        \
+        LLDB_INVALID_REGNUM, cap_c##i##_mips64 }, NULL, NULL }
+
 static RegisterInfo
 g_register_infos_mips64[] =
 {
@@ -64,6 +71,39 @@ g_register_infos_mips64[] =
     DEFINE_GPR(pc,       "pc",  gcc_dwarf_pc_mips64,    gcc_dwarf_pc_mips64,    LLDB_REGNUM_GENERIC_PC, LLDB_INVALID_REGNUM),
     DEFINE_GPR(ic,       NULL,  gcc_dwarf_ic_mips64,    gcc_dwarf_ic_mips64,    LLDB_INVALID_REGNUM,    LLDB_INVALID_REGNUM),
     DEFINE_GPR(dummy,    NULL,  gcc_dwarf_dummy_mips64, gcc_dwarf_dummy_mips64, LLDB_INVALID_REGNUM,    LLDB_INVALID_REGNUM),
+
+    DEFINE_CR( 0),
+    DEFINE_CR( 1),
+    DEFINE_CR( 2),
+    DEFINE_CR( 3),
+    DEFINE_CR( 4),
+    DEFINE_CR( 5),
+    DEFINE_CR( 6),
+    DEFINE_CR( 7),
+    DEFINE_CR( 8),
+    DEFINE_CR( 9),
+    DEFINE_CR(10),
+    DEFINE_CR(11),
+    DEFINE_CR(12),
+    DEFINE_CR(13),
+    DEFINE_CR(14),
+    DEFINE_CR(15),
+    DEFINE_CR(16),
+    DEFINE_CR(17),
+    DEFINE_CR(18),
+    DEFINE_CR(19),
+    DEFINE_CR(20),
+    DEFINE_CR(21),
+    DEFINE_CR(22),
+    DEFINE_CR(23),
+    DEFINE_CR(24),
+    DEFINE_CR(25),
+    DEFINE_CR(26),
+    DEFINE_CR(27),
+    DEFINE_CR(28),
+    DEFINE_CR(29),
+    DEFINE_CR(30),
+    DEFINE_CR(31),
 };
 static_assert((sizeof(g_register_infos_mips64) / sizeof(g_register_infos_mips64[0])) == k_num_registers_mips64,
     "g_register_infos_mips64 has wrong number of register infos");

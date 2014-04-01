@@ -18,12 +18,17 @@ using namespace lldb_private;
 RegisterContextCorePOSIX_mips64::RegisterContextCorePOSIX_mips64(Thread &thread,
                                                                  RegisterInfoInterface *register_info,
                                                                  const DataExtractor &gpregset,
-                                                                 const DataExtractor &fpregset)
+                                                                 const DataExtractor &fpregset,
+                                                                 const DataExtractor &capregset)
     : RegisterContextPOSIX_mips64(thread, 0, register_info)
 {
     m_gpr_buffer.reset(new DataBufferHeap(gpregset.GetDataStart(), gpregset.GetByteSize()));
     m_gpr.SetData(m_gpr_buffer);
     m_gpr.SetByteOrder(gpregset.GetByteOrder());
+
+    m_cr_buffer.reset(new DataBufferHeap(capregset.GetDataStart(), capregset.GetByteSize()));
+    m_cr.SetData(m_cr_buffer);
+    m_cr.SetByteOrder(capregset.GetByteOrder());
 
     m_in_bd = lldb_private::eLazyBoolCalculate;
 }
@@ -78,10 +83,13 @@ RegisterContextCorePOSIX_mips64::CauseBD()
 bool
 RegisterContextCorePOSIX_mips64::ReadRegister(const RegisterInfo *reg_info, RegisterValue &value)
 {
+    const uint32_t reg = reg_info->kinds[lldb::eRegisterKindLLDB];
     lldb::offset_t offset = reg_info->byte_offset;
-    uint64_t v = m_gpr.GetMaxU64(&offset, reg_info->byte_size);
-    if (offset == reg_info->byte_offset + reg_info->byte_size)
+    if (reg <= gpr_dummy_mips64)
     {
+        uint64_t v = m_gpr.GetMaxU64(&offset, reg_info->byte_size);
+        if (offset == reg_info->byte_offset + reg_info->byte_size)
+        {
             // Increment PC if the Cause register indicates the exception
             // occured in the branch delay slot.
             if (reg_info->kinds[lldb::eRegisterKindGeneric] == LLDB_REGNUM_GENERIC_PC)
@@ -91,8 +99,19 @@ RegisterContextCorePOSIX_mips64::ReadRegister(const RegisterInfo *reg_info, Regi
                 if (m_in_bd == lldb_private::eLazyBoolYes)
                     v += 4;
             }
-        value = v;
-        return true;
+            value = v;
+            return true;
+        }
+    }
+    else
+    {
+        uint8_t buf[32];
+        assert(reg_info->byte_size == 32);
+        if (m_cr.CopyData(offset, 32, buf) == reg_info->byte_size)
+        {
+            value.SetBytes(buf, 32, m_cr.GetByteOrder());
+            return true;
+        }
     }
     return false;
 }

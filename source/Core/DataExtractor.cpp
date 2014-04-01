@@ -2033,6 +2033,37 @@ DataExtractor::Dump (Stream *s,
             offset = Dump (s, offset, eFormatHex, 16, item_byte_size / 16, item_byte_size / 16, LLDB_INVALID_ADDRESS, 0, 0);
             s->PutChar('}');
             break;
+
+        // XXXEM: Build on struct pretty-printer instead.
+        case eFormatCapability:
+            {
+                assert (item_bit_size == 0 && item_bit_offset == 0);
+                uint64_t v;
+                s->PutCString("{ ");
+
+                offset = 0;
+                v = GetU32(&offset);
+                s->Printf("reserved=0x%08" PRIx64 " ", v);
+
+                offset = 4;
+                v = GetU32(&offset);
+                s->Printf("u=%d ", v & 0x80000000 ? 1 : 0);
+                s->Printf("perms=0x%08" PRIx64 " ", v & 0x7fffffff);
+
+                offset = 8;
+                v = GetU64(&offset);
+                s->Printf("otype=0x%016" PRIx64 " ", v);
+
+                offset = 16;
+                v = GetU64(&offset);
+                s->Printf("base=0x%016" PRIx64 " ", v);
+
+                offset = 24;
+                v = GetU64(&offset);
+                s->Printf("length=0x%016" PRIx64 " ", v);
+
+                s->PutChar('}');
+            }
         }
     }
 

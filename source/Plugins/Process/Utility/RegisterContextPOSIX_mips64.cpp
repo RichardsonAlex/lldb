@@ -71,16 +71,57 @@ uint32_t g_gpr_regnums[] =
     gpr_dummy_mips64
 };
 
+static const
+uint32_t g_cr_regnums[] =
+{
+    cap_c0_mips64,
+    cap_c1_mips64,
+    cap_c2_mips64,
+    cap_c3_mips64,
+    cap_c4_mips64,
+    cap_c5_mips64,
+    cap_c6_mips64,
+    cap_c7_mips64,
+    cap_c8_mips64,
+    cap_c9_mips64,
+    cap_c10_mips64,
+    cap_c11_mips64,
+    cap_c12_mips64,
+    cap_c13_mips64,
+    cap_c14_mips64,
+    cap_c15_mips64,
+    cap_c16_mips64,
+    cap_c17_mips64,
+    cap_c18_mips64,
+    cap_c19_mips64,
+    cap_c20_mips64,
+    cap_c21_mips64,
+    cap_c22_mips64,
+    cap_c23_mips64,
+    cap_c24_mips64,
+    cap_c25_mips64,
+    cap_c26_mips64,
+    cap_c27_mips64,
+    cap_c28_mips64,
+    cap_c29_mips64,
+    cap_c30_mips64,
+    cap_c31_mips64,
+};
+
+
 // Number of register sets provided by this context.
 enum
 {
-    k_num_register_sets = 1
+    k_num_register_sets = 3
 };
 
 static const RegisterSet
 g_reg_sets_mips64[k_num_register_sets] =
 {
     { "General Purpose Registers",  "gpr", k_num_gpr_registers_mips64, g_gpr_regnums },
+    // XXXEM placeholder - no FP register support for corefiles upstream yet.
+    { "Floating Point Registers", "fpr", 0, NULL },
+    { "Capability Registers", "cr", k_num_cr_registers_mips64, g_cr_regnums },
 };
 
 bool RegisterContextPOSIX_mips64::IsGPR(unsigned reg)
