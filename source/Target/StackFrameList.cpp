@@ -342,7 +342,8 @@ StackFrameList::GetFramesUpTo(uint32_t end_idx)
                 unwind_frame_sp.reset (new StackFrame (m_thread.shared_from_this(), m_frames.size(), idx, cfa, cfa_is_valid, pc, 0, stop_id_is_valid, is_history_frame, NULL));
                 m_frames.push_back (unwind_frame_sp);
             }
-            
+
+            assert(unwind_frame_sp);
             SymbolContext unwind_sc = unwind_frame_sp->GetSymbolContext (eSymbolContextBlock | eSymbolContextFunction);
             Block *unwind_block = unwind_sc.block;
             if (unwind_block)
