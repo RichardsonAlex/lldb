@@ -24,6 +24,8 @@ RegisterContextCorePOSIX_mips64::RegisterContextCorePOSIX_mips64(Thread &thread,
     m_gpr_buffer.reset(new DataBufferHeap(gpregset.GetDataStart(), gpregset.GetByteSize()));
     m_gpr.SetData(m_gpr_buffer);
     m_gpr.SetByteOrder(gpregset.GetByteOrder());
+
+    m_in_bd = lldb_private::eLazyBoolCalculate;
 }
 
 RegisterContextCorePOSIX_mips64::~RegisterContextCorePOSIX_mips64()
@@ -57,12 +59,38 @@ RegisterContextCorePOSIX_mips64::WriteFPR()
 }
 
 bool
+RegisterContextCorePOSIX_mips64::CauseBD()
+{
+    uint32_t reg_num;
+    reg_num = ConvertRegisterKindToRegisterNumber (lldb::eRegisterKindDWARF, gcc_dwarf_cause_mips64);
+    const RegisterInfo *reg_info = GetRegisterInfoAtIndex (reg_num);
+    RegisterValue reg_value;
+    
+    if (!ReadRegister(reg_info, reg_value))
+        return false;
+
+    if (reg_value.GetAsUInt64() & 0x80000000)
+        return true;
+
+    return false;
+}
+
+bool
 RegisterContextCorePOSIX_mips64::ReadRegister(const RegisterInfo *reg_info, RegisterValue &value)
 {
     lldb::offset_t offset = reg_info->byte_offset;
     uint64_t v = m_gpr.GetMaxU64(&offset, reg_info->byte_size);
     if (offset == reg_info->byte_offset + reg_info->byte_size)
     {
+            // Increment PC if the Cause register indicates the exception
+            // occured in the branch delay slot.
+            if (reg_info->kinds[lldb::eRegisterKindGeneric] == LLDB_REGNUM_GENERIC_PC)
+            {
+                if (m_in_bd == lldb_private::eLazyBoolCalculate)
+                    m_in_bd = CauseBD() ? lldb_private::eLazyBoolYes : lldb_private::eLazyBoolNo;
+                if (m_in_bd == lldb_private::eLazyBoolYes)
+                    v += 4;
+            }
         value = v;
         return true;
     }

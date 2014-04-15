@@ -52,9 +52,15 @@ protected:
     bool
     WriteFPR();
 
+    bool
+    CauseBD();
+
 private:
     lldb::DataBufferSP m_gpr_buffer;
     lldb_private::DataExtractor m_gpr;
+
+    // Cause indicates branch delay slot
+    lldb_private::LazyBool m_in_bd;
 };
 
 #endif // #ifndef liblldb_RegisterContextCorePOSIX_mips64_H_
