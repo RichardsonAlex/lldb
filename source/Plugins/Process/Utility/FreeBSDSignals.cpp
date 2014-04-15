@@ -28,4 +28,5 @@ FreeBSDSignals::Reset()
     //        ====== ============ ========== ======== ====== ====== ===================================================
     AddSignal (32,   "SIGTHR",    "THR",     false,   true , true , "thread interrupt");
     AddSignal (33,   "SIGLIBRT",  "LIBRT",   false,   true , true , "reserved by real-time library");
+    AddSignal (34,   "SIGPROT",   "PROT",    false,   true , true , "in-address space security exception");
 }
