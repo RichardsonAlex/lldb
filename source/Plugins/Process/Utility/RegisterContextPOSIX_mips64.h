@@ -62,7 +62,8 @@ enum
     gpr_pc_mips64,
     gpr_ic_mips64,
     gpr_dummy_mips64,
-    k_last_gpr_mips64 = gpr_dummy_mips64,
+    syn_pc_mips64,
+    k_last_gpr_mips64 = syn_pc_mips64,
 
     /* CHERI capability registers */
     cap_c0_mips64,

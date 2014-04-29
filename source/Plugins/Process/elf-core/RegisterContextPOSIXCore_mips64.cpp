@@ -85,20 +85,39 @@ RegisterContextCorePOSIX_mips64::ReadRegister(const RegisterInfo *reg_info, Regi
 {
     const uint32_t reg = reg_info->kinds[lldb::eRegisterKindLLDB];
     lldb::offset_t offset = reg_info->byte_offset;
-    if (reg <= gpr_dummy_mips64)
+    if (reg == syn_pc_mips64)
+    {
+        // Synthetic PC is the sum of:
+        // (a) GP reg PC
+        assert(reg_info->kinds[lldb::eRegisterKindGeneric] == LLDB_REGNUM_GENERIC_PC);
+        const RegisterInfo *pc_reg_info = GetRegisterInfoAtIndex(gpr_pc_mips64);
+        RegisterValue reg_value;
+        if (!ReadRegister(pc_reg_info, reg_value))
+            return false;
+        uint64_t v = reg_value.GetAsUInt64();
+
+        // (b) Cap reg PCC base
+        const RegisterInfo *pcc_reg_info = GetRegisterInfoAtIndex(cap_pcc_mips64);
+        assert(pcc_reg_info->byte_size == 32);
+        offset = pcc_reg_info->byte_offset + 16;
+        uint64_t pcc_base = m_cr.GetMaxU64(&offset, 8);
+        if (offset == pcc_reg_info->byte_offset + 24)
+            v += pcc_base;
+
+        // (c) Offset if Cause indicates exception occurred in branch delay slot
+        if (m_in_bd == lldb_private::eLazyBoolCalculate)
+            m_in_bd = CauseBD() ? lldb_private::eLazyBoolYes : lldb_private::eLazyBoolNo;
+        if (m_in_bd == lldb_private::eLazyBoolYes)
+            v += 4;
+
+        value = v;
+        return true;
+    }
+    else if (reg <= gpr_dummy_mips64)
     {
         uint64_t v = m_gpr.GetMaxU64(&offset, reg_info->byte_size);
         if (offset == reg_info->byte_offset + reg_info->byte_size)
         {
-            // Increment PC if the Cause register indicates the exception
-            // occured in the branch delay slot.
-            if (reg_info->kinds[lldb::eRegisterKindGeneric] == LLDB_REGNUM_GENERIC_PC)
-            {
-                if (m_in_bd == lldb_private::eLazyBoolCalculate)
-                    m_in_bd = CauseBD() ? lldb_private::eLazyBoolYes : lldb_private::eLazyBoolNo;
-                if (m_in_bd == lldb_private::eLazyBoolYes)
-                    v += 4;
-            }
             value = v;
             return true;
         }

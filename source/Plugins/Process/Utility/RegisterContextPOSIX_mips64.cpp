@@ -68,7 +68,8 @@ uint32_t g_gpr_regnums[] =
     gpr_cause_mips64,
     gpr_pc_mips64,
     gpr_ic_mips64,
-    gpr_dummy_mips64
+    gpr_dummy_mips64,
+    syn_pc_mips64,
 };
 
 static const

@@ -20,6 +20,12 @@
     { #reg, alt, sizeof(((GPR*)NULL)->reg), GPR_OFFSET(reg), eEncodingUint, \
       eFormatHex, { kind1, kind2, kind3, kind4, gpr_##reg##_mips64 }, NULL, NULL }
 
+#define STRINGIFY(x) #x
+
+#define DEFINE_SYN64(reg, alt, kind1, kind2, kind3, kind4)           \
+    { STRINGIFY(syn_##reg), alt, 8, 0, eEncodingUint, \
+      eFormatHex, { kind1, kind2, kind3, kind4, syn_##reg##_mips64 }, NULL, NULL }
+
 #define DEFINE_CR(reg, i, alt)                                                \
     { #reg, alt, 32, i * 32, eEncodingVector, eFormatCapability,              \
       { LLDB_INVALID_REGNUM, LLDB_INVALID_REGNUM, LLDB_INVALID_REGNUM,        \
@@ -66,9 +72,10 @@ g_register_infos_mips64[] =
     DEFINE_GPR(mulhi,    NULL,  gcc_dwarf_hi_mips64,    gcc_dwarf_hi_mips64,    LLDB_INVALID_REGNUM,    LLDB_INVALID_REGNUM),
     DEFINE_GPR(badvaddr, NULL,  gcc_dwarf_bad_mips64,   gcc_dwarf_bad_mips64,   LLDB_INVALID_REGNUM,    LLDB_INVALID_REGNUM),
     DEFINE_GPR(cause,    NULL,  gcc_dwarf_cause_mips64, gcc_dwarf_cause_mips64, LLDB_INVALID_REGNUM,    LLDB_INVALID_REGNUM),
-    DEFINE_GPR(pc,       "pc",  gcc_dwarf_pc_mips64,    gcc_dwarf_pc_mips64,    LLDB_REGNUM_GENERIC_PC, LLDB_INVALID_REGNUM),
+    DEFINE_GPR(pc,       "pc",  gcc_dwarf_pc_mips64,    gcc_dwarf_pc_mips64,    LLDB_INVALID_REGNUM,    LLDB_INVALID_REGNUM),
     DEFINE_GPR(ic,       NULL,  gcc_dwarf_ic_mips64,    gcc_dwarf_ic_mips64,    LLDB_INVALID_REGNUM,    LLDB_INVALID_REGNUM),
     DEFINE_GPR(dummy,    NULL,  gcc_dwarf_dummy_mips64, gcc_dwarf_dummy_mips64, LLDB_INVALID_REGNUM,    LLDB_INVALID_REGNUM),
+    DEFINE_SYN64(pc,     NULL,  LLDB_INVALID_REGNUM,    LLDB_INVALID_REGNUM,    LLDB_REGNUM_GENERIC_PC, LLDB_INVALID_REGNUM), // Synthetic PC
 
     // Capability registers.
     DEFINE_CR( c0,  0, NULL),
