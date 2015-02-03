@@ -22,6 +22,8 @@
 
 namespace lldb {
 
+class SBPlatform;
+
 class SBLaunchInfo
 {
 public:
@@ -309,6 +311,18 @@ public:
     GetProcess ();
 
     //------------------------------------------------------------------
+    /// Return the platform object associated with the target.
+    ///
+    /// After return, the platform object should be checked for
+    /// validity.
+    ///
+    /// @return
+    ///     A platform object.
+    //------------------------------------------------------------------
+    lldb::SBPlatform
+    GetPlatform ();
+
+    //------------------------------------------------------------------
     /// Install any binaries that need to be installed.
     ///
     /// This function does nothing when debugging on the host system.
@@ -564,6 +578,26 @@ public:
     GetTriple ();
 
     //------------------------------------------------------------------
+    /// Architecture data byte width accessor
+    ///
+    /// @return
+    /// The size in 8-bit (host) bytes of a minimum addressable
+    /// unit from the Architecture's data bus
+    //------------------------------------------------------------------
+    uint32_t
+    GetDataByteSize ();
+
+    //------------------------------------------------------------------
+    /// Architecture code byte width accessor
+    ///
+    /// @return
+    /// The size in 8-bit (host) bytes of a minimum addressable
+    /// unit from the Architecture's code bus
+    //------------------------------------------------------------------
+    uint32_t
+    GetCodeByteSize ();
+
+    //------------------------------------------------------------------
     /// Set the base load address for a module section.
     ///
     /// @param[in] section
@@ -683,9 +717,60 @@ public:
     //------------------------------------------------------------------
     lldb::SBValue
     FindFirstGlobalVariable (const char* name);
+
+    //------------------------------------------------------------------
+    /// Find global and static variables by pattern.
+    ///
+    /// @param[in] name
+    ///     The pattern to search for global or static variables
+    ///
+    /// @param[in] max_matches
+    ///     Allow the number of matches to be limited to \a max_matches.
+    /// 
+    /// @param[in] matchtype
+    ///     The match type to use.    
+    ///
+    /// @return
+    ///     A list of matched variables in an SBValueList.
+    //------------------------------------------------------------------
+    lldb::SBValueList
+        FindGlobalVariables(const char *name,
+                            uint32_t max_matches,
+                            MatchType matchtype);
     
+    //------------------------------------------------------------------
+    /// Find global functions by their name with pattern matching.
+    ///
+    /// @param[in] name
+    ///     The pattern to search for global or static variables
+    ///
+    /// @param[in] max_matches
+    ///     Allow the number of matches to be limited to \a max_matches.
+    /// 
+    /// @param[in] matchtype
+    ///     The match type to use.    
+    ///
+    /// @return
+    ///     A list of matched variables in an SBValueList.
+    //------------------------------------------------------------------
+    lldb::SBSymbolContextList
+        FindGlobalFunctions(const char *name,
+                           uint32_t max_matches,
+                           MatchType matchtype);
+
     void
     Clear ();
+
+    //------------------------------------------------------------------
+    /// Resolve a current file address into a section offset address.
+    ///
+    /// @param[in] file_addr
+    ///
+    /// @return
+    ///     An SBAddress which will be valid if...
+    //------------------------------------------------------------------
+    lldb::SBAddress
+    ResolveFileAddress (lldb::addr_t file_addr);
 
     //------------------------------------------------------------------
     /// Resolve a current load address into a section offset address.
@@ -731,6 +816,31 @@ public:
     SBSymbolContext
     ResolveSymbolContextForAddress (const SBAddress& addr, 
                                     uint32_t resolve_scope);
+
+    //------------------------------------------------------------------
+    /// Read target memory. If a target process is running then memory  
+    /// is read from here. Otherwise the memory is read from the object
+    /// files. For a target whose bytes are sized as a multiple of host
+    /// bytes, the data read back will preserve the target's byte order.
+    ///
+    /// @param[in] addr
+    ///     A target address to read from. 
+    ///
+    /// @param[out] buf
+    ///     The buffer to read memory into. 
+    ///
+    /// @param[in] size
+    ///     The maximum number of host bytes to read in the buffer passed
+    ///     into this call
+    ///
+    /// @param[out] error
+    ///     Error information is written here if the memory read fails.
+    ///
+    /// @return
+    ///     The amount of data read in host bytes.
+    //------------------------------------------------------------------
+    size_t
+    ReadMemory (const SBAddress addr, void *buf, size_t size, lldb::SBError &error);
 
     lldb::SBBreakpoint
     BreakpointCreateByLocation (const char *file, uint32_t line);
@@ -893,6 +1003,7 @@ protected:
     friend class SBAddress;
     friend class SBBlock;
     friend class SBDebugger;
+    friend class SBExecutionContext;
     friend class SBFunction;
     friend class SBInstruction;
     friend class SBModule;

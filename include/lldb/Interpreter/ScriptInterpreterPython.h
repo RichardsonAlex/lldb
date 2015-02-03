@@ -80,6 +80,22 @@ public:
     lldb::ScriptInterpreterObjectSP
     CreateSyntheticScriptedProvider (const char *class_name,
                                      lldb::ValueObjectSP valobj);
+
+    lldb::ScriptInterpreterObjectSP
+    virtual CreateScriptedThreadPlan (const char *class_name,
+                                      lldb::ThreadPlanSP thread_plan);
+
+    virtual bool
+    ScriptedThreadPlanExplainsStop (lldb::ScriptInterpreterObjectSP implementor_sp,
+                                    Event *event,
+                                    bool &script_error);
+    virtual bool
+    ScriptedThreadPlanShouldStop (lldb::ScriptInterpreterObjectSP implementor_sp,
+                                  Event *event,
+                                  bool &script_error);
+    virtual lldb::StateType
+    ScriptedThreadPlanGetRunState (lldb::ScriptInterpreterObjectSP implementor_sp,
+                                   bool &script_error);
     
     virtual lldb::ScriptInterpreterObjectSP
     OSPlugin_CreatePluginObject (const char *class_name,
@@ -125,12 +141,16 @@ public:
     virtual bool
     MightHaveChildrenSynthProviderInstance (const lldb::ScriptInterpreterObjectSP& implementor);
     
+    virtual lldb::ValueObjectSP
+    GetSyntheticValue (const lldb::ScriptInterpreterObjectSP& implementor);
+    
     virtual bool
     RunScriptBasedCommand(const char* impl_function,
                           const char* args,
                           ScriptedCommandSynchronicity synchronicity,
                           lldb_private::CommandReturnObject& cmd_retobj,
-                          Error& error);
+                          Error& error,
+                          const lldb_private::ExecutionContext& exe_ctx);
     
     Error
     GenerateFunction(const char *signature, const StringList &input);
@@ -212,6 +232,12 @@ public:
                             Error& error);
     
     virtual bool
+    RunScriptFormatKeyword (const char* impl_function,
+                            ValueObject* value,
+                            std::string& output,
+                            Error& error);
+    
+    virtual bool
     LoadScriptingModule (const char* filename,
                          bool can_reload,
                          bool init_session,
@@ -268,6 +294,7 @@ public:
                            SWIGPythonGetValueObjectSPFromSBValue swig_get_valobj_sp_from_sbvalue,
                            SWIGPythonUpdateSynthProviderInstance swig_update_provider,
                            SWIGPythonMightHaveChildrenSynthProviderInstance swig_mighthavechildren_provider,
+                           SWIGPythonGetValueSynthProviderInstance swig_getvalue_provider,
                            SWIGPythonCallCommand swig_call_command,
                            SWIGPythonCallModuleInit swig_call_module_init,
                            SWIGPythonCreateOSPlugin swig_create_os_plugin,
@@ -275,7 +302,10 @@ public:
                            SWIGPythonScriptKeyword_Thread swig_run_script_keyword_thread,
                            SWIGPythonScriptKeyword_Target swig_run_script_keyword_target,
                            SWIGPythonScriptKeyword_Frame swig_run_script_keyword_frame,
-                           SWIGPython_GetDynamicSetting swig_plugin_get);
+                           SWIGPythonScriptKeyword_Value swig_run_script_keyword_value,
+                           SWIGPython_GetDynamicSetting swig_plugin_get,
+                           SWIGPythonCreateScriptedThreadPlan swig_thread_plan_script,
+                           SWIGPythonCallThreadPlan swig_call_thread_plan);
 
     const char *
     GetDictionaryName ()

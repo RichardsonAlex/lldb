@@ -387,14 +387,15 @@ protected:
                 m_options.m_stop_on_continue.OptionWasSet())
             {
                 // Use user set settings
-                LazyBool print_command = m_options.m_silent_run.GetCurrentValue() ? eLazyBoolNo : eLazyBoolYes;
+                CommandInterpreterRunOptions options;
+                options.SetStopOnContinue(m_options.m_stop_on_continue.GetCurrentValue());
+                options.SetStopOnError (m_options.m_stop_on_error.GetCurrentValue());
+                options.SetEchoCommands (m_options.m_silent_run.GetCurrentValue());
+                options.SetPrintResults (m_options.m_silent_run.GetCurrentValue());
+
                 m_interpreter.HandleCommandsFromFile (cmd_file,
                                                       exe_ctx,
-                                                      m_options.m_stop_on_continue.GetCurrentValue() ? eLazyBoolYes : eLazyBoolNo, // Stop on continue
-                                                      m_options.m_stop_on_error.GetCurrentValue() ? eLazyBoolYes : eLazyBoolNo, // Stop on error
-                                                      print_command,        // Echo command
-                                                      print_command,        // Print command output
-                                                      eLazyBoolCalculate,   // Add to history
+                                                      options,
                                                       result);
                 
             }
@@ -402,13 +403,10 @@ protected:
             {
                 // No options were set, inherit any settings from nested "command source" commands,
                 // or set to sane default settings...
+                CommandInterpreterRunOptions options;
                 m_interpreter.HandleCommandsFromFile (cmd_file,
                                                       exe_ctx,
-                                                      eLazyBoolCalculate, // Stop on continue
-                                                      eLazyBoolCalculate, // Stop on error
-                                                      eLazyBoolCalculate, // Echo command
-                                                      eLazyBoolCalculate, // Print command output
-                                                      eLazyBoolCalculate, // Add to history
+                                                      options,
                                                       result);
                 
             }
@@ -1292,15 +1290,24 @@ public:
     CommandObjectPythonFunction (CommandInterpreter &interpreter,
                                  std::string name,
                                  std::string funct,
+                                 std::string help,
                                  ScriptedCommandSynchronicity synch) :
         CommandObjectRaw (interpreter,
                           name.c_str(),
-                          (std::string("Run Python function ") + funct).c_str(),
+                          NULL,
                           NULL),
         m_function_name(funct),
         m_synchro(synch),
         m_fetched_help_long(false)
     {
+        if (!help.empty())
+            SetHelp(help.c_str());
+        else
+        {
+            StreamString stream;
+            stream.Printf("For more information run 'help %s'",name.c_str());
+            SetHelp(stream.GetData());
+        }
     }
     
     virtual
@@ -1357,7 +1364,8 @@ protected:
                                                          raw_command_line,
                                                          m_synchro,
                                                          result,
-                                                         error) == false)
+                                                         error,
+                                                         m_exe_ctx) == false)
         {
             result.AppendError(error.AsCString());
             result.SetStatus(eReturnStatusFailed);
@@ -1617,7 +1625,12 @@ protected:
             switch (short_option)
             {
                 case 'f':
-                    m_funct_name = std::string(option_arg);
+                    if (option_arg)
+                        m_funct_name.assign(option_arg);
+                    break;
+                case 'h':
+                    if (option_arg)
+                        m_short_help.assign(option_arg);
                     break;
                 case 's':
                     m_synchronicity = (ScriptedCommandSynchronicity) Args::StringToOptionEnum(option_arg, g_option_table[option_idx].enum_values, 0, error);
@@ -1635,7 +1648,8 @@ protected:
         void
         OptionParsingStarting ()
         {
-            m_funct_name = "";
+            m_funct_name.clear();
+            m_short_help.clear();
             m_synchronicity = eScriptedCommandSynchronicitySynchronous;
         }
         
@@ -1652,6 +1666,7 @@ protected:
         // Instance variables to hold the values for command options.
         
         std::string m_funct_name;
+        std::string m_short_help;
         ScriptedCommandSynchronicity m_synchronicity;
     };
 
@@ -1695,6 +1710,7 @@ protected:
                         CommandObjectSP command_obj_sp(new CommandObjectPythonFunction (m_interpreter,
                                                                                         m_cmd_name,
                                                                                         funct_name_str.c_str(),
+                                                                                        m_short_help,
                                                                                         m_synchronicity));
                         
                         if (!m_interpreter.AddUserCommand(m_cmd_name, command_obj_sp, true))
@@ -1748,8 +1764,9 @@ protected:
             return false;
         }
         
-        // Store the command name and synchronicity in case we get multi-line input
+        // Store the options in case we get multi-line input
         m_cmd_name = command.GetArgumentAtIndex(0);
+        m_short_help.assign(m_options.m_short_help);
         m_synchronicity = m_options.m_synchronicity;
         
         if (m_options.m_funct_name.empty())
@@ -1764,6 +1781,7 @@ protected:
             CommandObjectSP new_cmd(new CommandObjectPythonFunction(m_interpreter,
                                                                     m_cmd_name,
                                                                     m_options.m_funct_name,
+                                                                    m_options.m_short_help,
                                                                     m_synchronicity));
             if (m_interpreter.AddUserCommand(m_cmd_name, new_cmd, true))
             {
@@ -1782,6 +1800,7 @@ protected:
     
     CommandOptions m_options;
     std::string m_cmd_name;
+    std::string m_short_help;
     ScriptedCommandSynchronicity m_synchronicity;
 };
 
@@ -1797,6 +1816,7 @@ OptionDefinition
 CommandObjectCommandsScriptAdd::CommandOptions::g_option_table[] =
 {
     { LLDB_OPT_SET_1, false, "function", 'f', OptionParser::eRequiredArgument, NULL, NULL, 0, eArgTypePythonFunction,        "Name of the Python function to bind to this command name."},
+    { LLDB_OPT_SET_1, false, "help"  , 'h', OptionParser::eRequiredArgument, NULL, NULL, 0, eArgTypeHelpText, "The help text to display for this command."},
     { LLDB_OPT_SET_1, false, "synchronicity", 's', OptionParser::eRequiredArgument, NULL, g_script_synchro_type, 0, eArgTypeScriptedCommandSynchronicity,        "Set the synchronicity of this command's executions with regard to LLDB event system."},
     { 0, false, NULL, 0, 0, NULL, NULL, 0, eArgTypeNone, NULL }
 };

@@ -32,7 +32,7 @@
 using namespace lldb;
 using namespace lldb_private;
 
-Platform *
+PlatformSP
 PlatformFreeBSD::CreateInstance (bool force, const lldb_private::ArchSpec *arch)
 {
     // The only time we create an instance is when we are creating a remote
@@ -84,8 +84,8 @@ PlatformFreeBSD::CreateInstance (bool force, const lldb_private::ArchSpec *arch)
         }
     }
     if (create)
-        return new PlatformFreeBSD (is_host);
-    return NULL;
+        return PlatformSP(new PlatformFreeBSD (is_host));
+    return PlatformSP();
 
 }
 
@@ -124,7 +124,7 @@ PlatformFreeBSD::Initialize ()
     	// Force a host flag to true for the default platform object.
         PlatformSP default_platform_sp (new PlatformFreeBSD(true));
         default_platform_sp->SetSystemArchitecture(HostInfo::GetArchitecture());
-        Platform::SetDefaultPlatform (default_platform_sp);
+        Platform::SetHostPlatform (default_platform_sp);
 #endif
         PluginManager::RegisterPlugin(PlatformFreeBSD::GetPluginNameStatic(false),
                                       PlatformFreeBSD::GetDescriptionStatic(false),
@@ -326,6 +326,13 @@ PlatformFreeBSD::GetSoftwareBreakpointTrapOpcode (Target &target, BreakpointSite
             trap_opcode_size = sizeof(g_i386_opcode);
         }
         break;
+    case llvm::Triple::ppc:
+    case llvm::Triple::ppc64:
+        {
+            static const uint8_t g_ppc_opcode[] = { 0x7f, 0xe0, 0x00, 0x08 };
+            trap_opcode = g_ppc_opcode;
+            trap_opcode_size = sizeof(g_ppc_opcode);
+        }
     }
 
     if (bp_site->SetTrapOpcode(trap_opcode, trap_opcode_size))
@@ -404,7 +411,7 @@ PlatformFreeBSD::ConnectRemote (Args& args)
     else
     {
         if (!m_remote_platform_sp)
-            m_remote_platform_sp = Platform::Create ("remote-gdb-server", error);
+            m_remote_platform_sp = Platform::Create (ConstString("remote-gdb-server"), error);
 
         if (m_remote_platform_sp)
         {

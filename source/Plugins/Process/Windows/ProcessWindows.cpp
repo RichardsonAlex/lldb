@@ -11,56 +11,29 @@
 #include "lldb/Host/windows/windows.h"
 
 // C++ Includes
+#include <vector>
+
 // Other libraries and framework includes
 #include "lldb/Core/Module.h"
 #include "lldb/Core/PluginManager.h"
 #include "lldb/Core/State.h"
 #include "lldb/Host/Host.h"
+#include "lldb/Host/HostProcess.h"
+#include "lldb/Host/MonitoringProcessLauncher.h"
+#include "lldb/Host/ThreadLauncher.h"
+#include "lldb/Host/windows/ProcessLauncherWindows.h"
 #include "lldb/Symbol/ObjectFile.h"
 #include "lldb/Target/DynamicLoader.h"
 #include "lldb/Target/FileAction.h"
 #include "lldb/Target/Target.h"
 
+#include "DebuggerThread.h"
+#include "LocalDebugDelegate.h"
+#include "ProcessMessages.h"
 #include "ProcessWindows.h"
 
 using namespace lldb;
 using namespace lldb_private;
-
-namespace
-{
-HANDLE
-GetStdioHandle(ProcessLaunchInfo &launch_info, int fd)
-{
-    const FileAction *action = launch_info.GetFileActionForFD(fd);
-    if (action == nullptr)
-        return NULL;
-    SECURITY_ATTRIBUTES secattr = {0};
-    secattr.nLength = sizeof(SECURITY_ATTRIBUTES);
-    secattr.bInheritHandle = TRUE;
-
-    const char *path = action->GetPath();
-    DWORD access = 0;
-    DWORD share = FILE_SHARE_READ | FILE_SHARE_WRITE;
-    DWORD create = 0;
-    DWORD flags = 0;
-    if (fd == STDIN_FILENO)
-    {
-        access = GENERIC_READ;
-        create = OPEN_EXISTING;
-        flags = FILE_ATTRIBUTE_READONLY;
-    }
-    if (fd == STDOUT_FILENO || fd == STDERR_FILENO)
-    {
-        access = GENERIC_WRITE;
-        create = CREATE_ALWAYS;
-        if (fd == STDERR_FILENO)
-            flags = FILE_FLAG_WRITE_THROUGH;
-    }
-
-    HANDLE result = ::CreateFile(path, access, share, &secattr, create, flags, NULL);
-    return (result == INVALID_HANDLE_VALUE) ? NULL : result;
-}
-}
 
 //------------------------------------------------------------------------------
 // Static functions.
@@ -90,6 +63,10 @@ ProcessWindows::Initialize()
 
 ProcessWindows::ProcessWindows(Target& target, Listener &listener)
     : lldb_private::Process(target, listener)
+{
+}
+
+ProcessWindows::~ProcessWindows()
 {
 }
 
@@ -123,43 +100,24 @@ Error
 ProcessWindows::DoLaunch(Module *exe_module,
                          ProcessLaunchInfo &launch_info)
 {
-    std::string executable;
-    std::string commandLine;
-    std::vector<char> environment;
-    STARTUPINFO startupinfo = {0};
-    PROCESS_INFORMATION pi = {0};
-
-    HANDLE stdin_handle = GetStdioHandle(launch_info, STDIN_FILENO);
-    HANDLE stdout_handle = GetStdioHandle(launch_info, STDOUT_FILENO);
-    HANDLE stderr_handle = GetStdioHandle(launch_info, STDERR_FILENO);
-
-    startupinfo.cb = sizeof(startupinfo);
-    startupinfo.dwFlags |= STARTF_USESTDHANDLES;
-    startupinfo.hStdError = stderr_handle;
-    startupinfo.hStdInput = stdin_handle;
-    startupinfo.hStdOutput = stdout_handle;
-
-    executable = launch_info.GetExecutableFile().GetPath();
-    launch_info.GetArguments().GetQuotedCommandString(commandLine);
-    BOOL result = ::CreateProcessA(executable.c_str(), const_cast<char *>(commandLine.c_str()), NULL, NULL, TRUE,
-                                   CREATE_NEW_CONSOLE, NULL, launch_info.GetWorkingDirectory(), &startupinfo, &pi);
-    if (result)
+    Error result;
+    HostProcess process;
+    SetPrivateState(eStateLaunching);
+    if (launch_info.GetFlags().Test(eLaunchFlagDebug))
     {
-        ::CloseHandle(pi.hProcess);
-        ::CloseHandle(pi.hThread);
+        DebugDelegateSP delegate(new LocalDebugDelegate(shared_from_this()));
+        m_debugger.reset(new DebuggerThread(delegate));
+        process = m_debugger->DebugLaunch(launch_info);
     }
+    else
+        return Host::LaunchProcess(launch_info);
 
-    if (stdin_handle)
-        ::CloseHandle(stdin_handle);
-    if (stdout_handle)
-        ::CloseHandle(stdout_handle);
-    if (stderr_handle)
-        ::CloseHandle(stderr_handle);
+    if (!result.Success())
+        return result;
 
-    Error error;
-    if (!result)
-        error.SetErrorToErrno();
-    return error;
+    launch_info.SetProcessID(process.GetProcessId());
+    SetID(process.GetProcessId());
+    return result;
 }
 
 Error
@@ -238,7 +196,6 @@ ProcessWindows::DoReadMemory(lldb::addr_t vm_addr,
     return 0;
 }
 
-
 bool
 ProcessWindows::CanDebug(Target &target, bool plugin_specified_by_name)
 {
@@ -252,3 +209,53 @@ ProcessWindows::CanDebug(Target &target, bool plugin_specified_by_name)
     return false;
 }
 
+void
+ProcessWindows::OnProcessLaunched(const ProcessMessageCreateProcess &message)
+{
+}
+
+void
+ProcessWindows::OnExitProcess(const ProcessMessageExitProcess &message)
+{
+    SetProcessExitStatus(nullptr, GetID(), true, 0, message.GetExitCode());
+}
+
+void
+ProcessWindows::OnDebuggerConnected(const ProcessMessageDebuggerConnected &message)
+{
+}
+
+void
+ProcessWindows::OnDebugException(const ProcessMessageException &message)
+{
+}
+
+void
+ProcessWindows::OnCreateThread(const ProcessMessageCreateThread &message)
+{
+}
+
+void
+ProcessWindows::OnExitThread(const ProcessMessageExitThread &message)
+{
+}
+
+void
+ProcessWindows::OnLoadDll(const ProcessMessageLoadDll &message)
+{
+}
+
+void
+ProcessWindows::OnUnloadDll(const ProcessMessageUnloadDll &message)
+{
+}
+
+void
+ProcessWindows::OnDebugString(const ProcessMessageDebugString &message)
+{
+}
+
+void
+ProcessWindows::OnDebuggerError(const ProcessMessageDebuggerError &message)
+{
+}

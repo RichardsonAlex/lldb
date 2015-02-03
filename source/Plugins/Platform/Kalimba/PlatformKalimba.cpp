@@ -32,7 +32,7 @@ using namespace lldb_private;
 
 static uint32_t g_initialize_count = 0;
 
-Platform *
+PlatformSP
 PlatformKalimba::CreateInstance (bool force, const ArchSpec *arch)
 {
     bool create = force;
@@ -50,8 +50,8 @@ PlatformKalimba::CreateInstance (bool force, const ArchSpec *arch)
         }
     }
     if (create)
-        return new PlatformKalimba(false);
-    return NULL;
+        return PlatformSP(new PlatformKalimba(false));
+    return PlatformSP();
 }
 
 lldb_private::ConstString
@@ -250,7 +250,17 @@ PlatformKalimba::GetSupportedArchitectureAtIndex (uint32_t idx, ArchSpec &arch)
 {
     if (idx == 0)
     {
-        arch = ArchSpec("kalimba-csr-unknown");
+        arch = ArchSpec("kalimba3-csr-unknown");
+        return true;
+    }
+    if (idx == 1)
+    {
+        arch = ArchSpec("kalimba4-csr-unknown");
+        return true;
+    }
+    if (idx == 2)
+    {
+        arch = ArchSpec("kalimba5-csr-unknown");
         return true;
     }
     return false;

@@ -38,6 +38,7 @@
 #include "lldb/Expression/IRDynamicChecks.h"
 #include "lldb/Host/FileSpec.h"
 #include "lldb/Host/Host.h"
+#include "lldb/Host/HostThread.h"
 #include "lldb/Host/ProcessRunLock.h"
 #include "lldb/Interpreter/Args.h"
 #include "lldb/Interpreter/Options.h"
@@ -51,6 +52,7 @@
 #include "lldb/Target/ThreadList.h"
 #include "lldb/Target/UnixSignals.h"
 #include "lldb/Utility/PseudoTerminal.h"
+#include "lldb/Target/InstrumentationRuntime.h"
 
 namespace lldb_private {
 
@@ -1271,7 +1273,9 @@ public:
     //------------------------------------------------------------------
     Error
     Resume();
-    
+
+    Error
+    ResumeSynchronous (Stream *stream);
     //------------------------------------------------------------------
     /// Halts a running process.
     ///
@@ -2678,7 +2682,8 @@ public:
     WaitForProcessToStop (const TimeValue *timeout,
                           lldb::EventSP *event_sp_ptr = NULL,
                           bool wait_always = true,
-                          Listener *hijack_listener = NULL);
+                          Listener *hijack_listener = NULL,
+                          Stream *stream = NULL);
 
 
     //--------------------------------------------------------------------------------------
@@ -2703,7 +2708,28 @@ public:
     WaitForStateChangedEvents (const TimeValue *timeout,
                                lldb::EventSP &event_sp,
                                Listener *hijack_listener); // Pass NULL to use builtin listener
-    
+
+    //--------------------------------------------------------------------------------------
+    /// Centralize the code that handles and prints descriptions for process state changes.
+    ///
+    /// @param[in] event_sp
+    ///     The process state changed event
+    ///
+    /// @param[in] stream
+    ///     The output stream to get the state change description
+    ///
+    /// @param[inout] pop_process_io_handler
+    ///     If this value comes in set to \b true, then pop the Process IOHandler if needed.
+    ///     Else this variable will be set to \b true or \b false to indicate if the process
+    ///     needs to have its process IOHandler popped.
+    ///
+    /// @return
+    ///     \b true if the event describes a process state changed event, \b false otherwise.
+    //--------------------------------------------------------------------------------------
+    static bool
+    HandleProcessStateChangedEvent (const lldb::EventSP &event_sp,
+                                    Stream *stream,
+                                    bool &pop_process_io_handler);
     Event *
     PeekAtStateChangedEvents ();
     
@@ -2909,7 +2935,7 @@ public:
     ProcessRunLock &
     GetRunLock ()
     {
-        if (Host::GetCurrentThread() == m_private_state_thread)
+        if (m_private_state_thread.EqualsThread(Host::GetCurrentThread()))
             return m_private_run_lock;
         else
             return m_public_run_lock;
@@ -2925,6 +2951,9 @@ public:
     
     lldb::ThreadCollectionSP
     GetHistoryThreads(lldb::addr_t addr);
+
+    lldb::InstrumentationRuntimeSP
+    GetInstrumentationRuntime(lldb::InstrumentationRuntimeType type);
 
 protected:
 
@@ -3007,7 +3036,7 @@ protected:
     bool
     PrivateStateThreadIsValid () const
     {
-        return IS_VALID_LLDB_HOST_THREAD(m_private_state_thread);
+        return m_private_state_thread.IsJoinable();
     }
     
     void
@@ -3042,13 +3071,14 @@ protected:
     Broadcaster                 m_private_state_control_broadcaster; // This is the control broadcaster, used to pause, resume & stop the private state thread.
     Listener                    m_private_state_listener;     // This is the listener for the private state thread.
     Predicate<bool>             m_private_state_control_wait; /// This Predicate is used to signal that a control operation is complete.
-    lldb::thread_t              m_private_state_thread;  // Thread ID for the thread that watches internal state events
+    HostThread m_private_state_thread;                        // Thread ID for the thread that watches internal state events
     ProcessModID                m_mod_id;               ///< Tracks the state of the process over stops and other alterations.
     uint32_t                    m_process_unique_id;    ///< Each lldb_private::Process class that is created gets a unique integer ID that increments with each new instance
     uint32_t                    m_thread_index_id;      ///< Each thread is created with a 1 based index that won't get re-used.
     std::map<uint64_t, uint32_t> m_thread_id_to_index_id_map;
     int                         m_exit_status;          ///< The exit status of the process, or -1 if not set.
     std::string                 m_exit_string;          ///< A textual description of why a process exited.
+    Mutex                       m_exit_status_mutex;    ///< Mutex so m_exit_status m_exit_string can be safely accessed from multiple threads
     Mutex                       m_thread_mutex;
     ThreadList                  m_thread_list_real;     ///< The threads for this process as are known to the protocol we are debugging with
     ThreadList                  m_thread_list;          ///< The threads for this process as the user will see them. This is usually the same as
@@ -3080,6 +3110,7 @@ protected:
     AllocatedMemoryCache        m_allocated_memory_cache;
     bool                        m_should_detach;   /// Should we detach if the process object goes away with an explicit call to Kill or Detach?
     LanguageRuntimeCollection   m_language_runtimes;
+    InstrumentationRuntimeCollection m_instrumentation_runtimes;
     std::unique_ptr<NextEventAction> m_next_event_action_ap;
     std::vector<PreResumeCallbackAndBaton> m_pre_resume_actions;
     ProcessRunLock              m_public_run_lock;
@@ -3176,7 +3207,10 @@ protected:
     
     Error
     HaltForDestroyOrDetach(lldb::EventSP &exit_event_sp);
-    
+
+    bool
+    StateChangedIsExternallyHijacked();
+
 private:
     //------------------------------------------------------------------
     // For Process only

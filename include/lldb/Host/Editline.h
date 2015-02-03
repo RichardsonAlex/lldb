@@ -14,17 +14,19 @@
 #include "lldb/lldb-private.h"
 
 #include <stdio.h>
-#ifdef _WIN32
+#if defined(_WIN32)
 #include "lldb/Host/windows/editlinewin.h"
 #else
+#if !defined(__ANDROID_NDK__)
 #include <histedit.h>
+#endif
 #endif
 
 #include <string>
 #include <vector>
 
-#include "lldb/Core/ConnectionFileDescriptor.h"
 #include "lldb/Host/Condition.h"
+#include "lldb/Host/ConnectionFileDescriptor.h"
 #include "lldb/Host/FileSpec.h"
 #include "lldb/Host/Mutex.h"
 #include "lldb/Host/Predicate.h"

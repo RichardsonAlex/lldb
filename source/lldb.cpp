@@ -31,6 +31,8 @@
 #include "Plugins/ABI/MacOSX-arm/ABIMacOSX_arm.h"
 #include "Plugins/ABI/MacOSX-arm64/ABIMacOSX_arm64.h"
 #include "Plugins/ABI/SysV-x86_64/ABISysV_x86_64.h"
+#include "Plugins/ABI/SysV-ppc/ABISysV_ppc.h"
+#include "Plugins/ABI/SysV-ppc64/ABISysV_ppc64.h"
 #include "Plugins/Disassembler/llvm/DisassemblerLLVMC.h"
 #include "Plugins/DynamicLoader/POSIX-DYLD/DynamicLoaderPOSIXDYLD.h"
 #include "Plugins/Instruction/ARM/EmulateInstructionARM.h"
@@ -93,6 +95,7 @@
 #include "Plugins/Process/gdb-remote/ProcessGDBRemote.h"
 #include "Plugins/DynamicLoader/Static/DynamicLoaderStatic.h"
 #include "Plugins/MemoryHistory/asan/MemoryHistoryASan.h"
+#include "Plugins/InstrumentationRuntime/AddressSanitizer/AddressSanitizerRuntime.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -131,6 +134,8 @@ lldb_private::Initialize ()
         ABIMacOSX_arm::Initialize();
         ABIMacOSX_arm64::Initialize();
         ABISysV_x86_64::Initialize();
+        ABISysV_ppc::Initialize();
+        ABISysV_ppc64::Initialize();
         DisassemblerLLVMC::Initialize();
         ObjectContainerBSDArchive::Initialize();
         ObjectFileELF::Initialize();
@@ -156,6 +161,7 @@ lldb_private::Initialize ()
         JITLoaderGDB::Initialize();
         ProcessElfCore::Initialize();
         MemoryHistoryASan::Initialize();
+        AddressSanitizerRuntime::Initialize();
         
 #if defined (__APPLE__)
         //----------------------------------------------------------------------
@@ -223,6 +229,8 @@ lldb_private::Terminate ()
     ABIMacOSX_arm::Terminate();
     ABIMacOSX_arm64::Terminate();
     ABISysV_x86_64::Terminate();
+    ABISysV_ppc::Terminate();
+    ABISysV_ppc64::Terminate();
     DisassemblerLLVMC::Terminate();
     ObjectContainerBSDArchive::Terminate();
     ObjectFileELF::Terminate();
@@ -247,6 +255,7 @@ lldb_private::Terminate ()
     JITLoaderGDB::Terminate();
     ProcessElfCore::Terminate();
     MemoryHistoryASan::Terminate();
+    AddressSanitizerRuntime::Terminate();
     
 #if defined (__APPLE__)
     DynamicLoaderMacOSXDYLD::Terminate();

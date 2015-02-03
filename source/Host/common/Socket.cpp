@@ -18,6 +18,14 @@
 #include "lldb/Host/TimeValue.h"
 #include "lldb/Interpreter/Args.h"
 
+#ifdef __ANDROID_NDK__
+#include <linux/tcp.h>
+#include <bits/error_constants.h>
+#include <asm-generic/errno-base.h>
+#include <errno.h>
+#include <arpa/inet.h>
+#endif
+
 #ifndef LLDB_DISABLE_POSIX
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -39,6 +47,13 @@ typedef const void * set_socket_option_arg_type;
 typedef void * get_socket_option_arg_type;
 const NativeSocket Socket::kInvalidSocketValue = -1;
 #endif // #if defined(_WIN32)
+
+#ifdef __ANDROID__ 
+// Android does not have SUN_LEN
+#ifndef SUN_LEN
+#define SUN_LEN(ptr) ((size_t) (((struct sockaddr_un *) 0)->sun_path) + strlen((ptr)->sun_path))
+#endif
+#endif // #ifdef __ANDROID__
 
 Socket::Socket(NativeSocket socket, SocketProtocol protocol, bool should_close)
     : IOObject(eFDTypeSocket, should_close)

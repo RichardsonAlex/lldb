@@ -972,7 +972,32 @@ SBDebugger::RunCommandInterpreter (bool auto_handle_events,
                                    bool spawn_thread)
 {
     if (m_opaque_sp)
-        m_opaque_sp->GetCommandInterpreter().RunCommandInterpreter(auto_handle_events, spawn_thread);
+    {
+        CommandInterpreterRunOptions options;
+
+        m_opaque_sp->GetCommandInterpreter().RunCommandInterpreter(auto_handle_events,
+                                                                   spawn_thread,
+                                                                   options);
+    }
+}
+
+void
+SBDebugger::RunCommandInterpreter (bool auto_handle_events,
+                                   bool spawn_thread,
+                                   SBCommandInterpreterRunOptions &options,
+                                   int  &num_errors,
+                                   bool &quit_requested,
+                                   bool &stopped_for_crash)
+
+{
+    if (m_opaque_sp)
+    {
+        CommandInterpreter &interp = m_opaque_sp->GetCommandInterpreter();
+        interp.RunCommandInterpreter(auto_handle_events, spawn_thread, options.ref());
+        num_errors = interp.GetNumErrors();
+        quit_requested = interp.GetQuitRequested();
+        stopped_for_crash = interp.GetStoppedForCrash();
+    }
 }
 
 void
@@ -1186,18 +1211,41 @@ SBDebugger::GetID()
 
 
 SBError
-SBDebugger::SetCurrentPlatform (const char *platform_name)
+SBDebugger::SetCurrentPlatform (const char *platform_name_cstr)
 {
     SBError sb_error;
     if (m_opaque_sp)
     {
-        PlatformSP platform_sp (Platform::Create (platform_name, sb_error.ref()));
-        
-        if (platform_sp)
+        if (platform_name_cstr && platform_name_cstr[0])
         {
-            bool make_selected = true;
-            m_opaque_sp->GetPlatformList().Append (platform_sp, make_selected);
+            ConstString platform_name (platform_name_cstr);
+            PlatformSP platform_sp (Platform::Find (platform_name));
+
+            if (platform_sp)
+            {
+                // Already have a platform with this name, just select it
+                m_opaque_sp->GetPlatformList().SetSelectedPlatform(platform_sp);
+            }
+            else
+            {
+                // We don't have a platform by this name yet, create one
+                platform_sp = Platform::Create (platform_name, sb_error.ref());
+                if (platform_sp)
+                {
+                    // We created the platform, now append and select it
+                    bool make_selected = true;
+                    m_opaque_sp->GetPlatformList().Append (platform_sp, make_selected);
+                }
+            }
         }
+        else
+        {
+            sb_error.ref().SetErrorString("invalid platform name");
+        }
+    }
+    else
+    {
+        sb_error.ref().SetErrorString("invalid debugger");
     }
     return sb_error;
 }

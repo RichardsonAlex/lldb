@@ -230,6 +230,7 @@ ValueObjectConstResult::ValueObjectConstResult (ExecutionContextScope *exe_scope
 {
     m_value = value;
     m_value.GetData(m_data);
+    m_name = name;
 }
 
 ValueObjectConstResult::~ValueObjectConstResult()
@@ -358,3 +359,8 @@ ValueObjectConstResult::GetDynamicValue (lldb::DynamicValueType use_dynamic)
     return ValueObjectSP();
 }
 
+lldb::LanguageType
+ValueObjectConstResult::GetPreferredDisplayLanguage ()
+{
+    return lldb::eLanguageTypeUnknown;
+}

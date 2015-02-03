@@ -85,7 +85,7 @@ static const CoreDefinition g_core_definitions[] =
     { eByteOrderBig   , 8, 4, 4, llvm::Triple::mips64 , ArchSpec::eCore_mips64          , "mips64"    },
     { eByteOrderBig   , 8, 4, 4, llvm::Triple::cheri  , ArchSpec::eCore_cheri           , "cheri"     },
     
-    { eByteOrderBig   , 4, 4, 4, llvm::Triple::ppc    , ArchSpec::eCore_ppc_generic     , "ppc"       },
+    { eByteOrderBig   , 4, 4, 4, llvm::Triple::ppc    , ArchSpec::eCore_ppc_generic     , "powerpc"   },
     { eByteOrderBig   , 4, 4, 4, llvm::Triple::ppc    , ArchSpec::eCore_ppc_ppc601      , "ppc601"    },
     { eByteOrderBig   , 4, 4, 4, llvm::Triple::ppc    , ArchSpec::eCore_ppc_ppc602      , "ppc602"    },
     { eByteOrderBig   , 4, 4, 4, llvm::Triple::ppc    , ArchSpec::eCore_ppc_ppc603      , "ppc603"    },
@@ -99,7 +99,7 @@ static const CoreDefinition g_core_definitions[] =
     { eByteOrderBig   , 4, 4, 4, llvm::Triple::ppc    , ArchSpec::eCore_ppc_ppc7450     , "ppc7450"   },
     { eByteOrderBig   , 4, 4, 4, llvm::Triple::ppc    , ArchSpec::eCore_ppc_ppc970      , "ppc970"    },
     
-    { eByteOrderBig   , 8, 4, 4, llvm::Triple::ppc64  , ArchSpec::eCore_ppc64_generic   , "ppc64"     },
+    { eByteOrderBig   , 8, 4, 4, llvm::Triple::ppc64  , ArchSpec::eCore_ppc64_generic   , "powerpc64" },
     { eByteOrderBig   , 8, 4, 4, llvm::Triple::ppc64  , ArchSpec::eCore_ppc64_ppc970_64 , "ppc970-64" },
     
     { eByteOrderLittle, 4, 4, 4, llvm::Triple::sparc  , ArchSpec::eCore_sparc_generic   , "sparc"     },
@@ -119,7 +119,6 @@ static const CoreDefinition g_core_definitions[] =
     { eByteOrderLittle, 4, 4, 4 , llvm::Triple::UnknownArch , ArchSpec::eCore_uknownMach32  , "unknown-mach-32" },
     { eByteOrderLittle, 8, 4, 4 , llvm::Triple::UnknownArch , ArchSpec::eCore_uknownMach64  , "unknown-mach-64" },
 
-    { eByteOrderLittle, 4, 1, 1 , llvm::Triple::kalimba , ArchSpec::eCore_kalimba  , "kalimba" },
     { eByteOrderBig   , 4, 1, 1 , llvm::Triple::kalimba , ArchSpec::eCore_kalimba3  , "kalimba3" },
     { eByteOrderLittle, 4, 1, 1 , llvm::Triple::kalimba , ArchSpec::eCore_kalimba4  , "kalimba4" },
     { eByteOrderLittle, 4, 1, 1 , llvm::Triple::kalimba , ArchSpec::eCore_kalimba5  , "kalimba5" }
@@ -266,11 +265,9 @@ static const ArchDefinitionEntry g_elf_arch_entries[] =
     { ArchSpec::eCore_cheri           , llvm::ELF::EM_MIPS   , LLDB_INVALID_CPUTYPE, 0xFFFFFFFFu, 0xFFFFFFFFu }, // MIPS
     { ArchSpec::eCore_mips64          , llvm::ELF::EM_MIPS   , LLDB_INVALID_CPUTYPE, 0xFFFFFFFFu, 0xFFFFFFFFu }, // MIPS
     { ArchSpec::eCore_hexagon_generic , llvm::ELF::EM_HEXAGON, LLDB_INVALID_CPUTYPE, 0xFFFFFFFFu, 0xFFFFFFFFu }, // HEXAGON
-    { ArchSpec::eCore_kalimba ,         llvm::ELF::EM_CSR_KALIMBA, LLDB_INVALID_CPUTYPE, 0xFFFFFFFFu, 0xFFFFFFFFu },  // KALIMBA
-    { ArchSpec::eCore_kalimba3 ,        llvm::ELF::EM_CSR_KALIMBA, 3, 0xFFFFFFFFu, 0xFFFFFFFFu },  // KALIMBA
-    { ArchSpec::eCore_kalimba4 ,        llvm::ELF::EM_CSR_KALIMBA, 4, 0xFFFFFFFFu, 0xFFFFFFFFu },  // KALIMBA
-    { ArchSpec::eCore_kalimba5 ,        llvm::ELF::EM_CSR_KALIMBA, 5, 0xFFFFFFFFu, 0xFFFFFFFFu }  // KALIMBA
-
+    { ArchSpec::eCore_kalimba3 ,        llvm::ELF::EM_CSR_KALIMBA, llvm::Triple::KalimbaSubArch_v3, 0xFFFFFFFFu, 0xFFFFFFFFu },  // KALIMBA
+    { ArchSpec::eCore_kalimba4 ,        llvm::ELF::EM_CSR_KALIMBA, llvm::Triple::KalimbaSubArch_v4, 0xFFFFFFFFu, 0xFFFFFFFFu },  // KALIMBA
+    { ArchSpec::eCore_kalimba5 ,        llvm::ELF::EM_CSR_KALIMBA, llvm::Triple::KalimbaSubArch_v5, 0xFFFFFFFFu, 0xFFFFFFFFu }  // KALIMBA
 };
 
 static const ArchDefinition g_elf_arch_def = {
@@ -505,11 +502,11 @@ ArchSpec::GetDataByteSize () const
     switch (m_core)
     {
     case eCore_kalimba3:
-        return 3;        
+        return 4;        
     case eCore_kalimba4:
         return 1;        
     case eCore_kalimba5:
-        return 3;
+        return 4;
     default:        
         return 1;        
     }
@@ -1035,16 +1032,6 @@ cores_match (const ArchSpec::Core core1, const ArchSpec::Core core2, bool try_in
             try_inverse = false;
             if (core2 == ArchSpec::eCore_x86_64_x86_64)
                 return true;
-        }
-        break;
-
-    case ArchSpec::eCore_kalimba:
-    case ArchSpec::eCore_kalimba3:
-    case ArchSpec::eCore_kalimba4:
-    case ArchSpec::eCore_kalimba5:
-        if (core2 >= ArchSpec::kCore_kalimba_first && core2 <= ArchSpec::kCore_kalimba_last)
-        {
-            return true;
         }
         break;
 

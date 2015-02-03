@@ -16,7 +16,6 @@
 // Other libraries and framework includes
 // Project includes
 #include "lldb/Breakpoint/BreakpointLocation.h"
-#include "lldb/Core/ConnectionFileDescriptor.h"
 #include "lldb/Core/Debugger.h"
 #include "lldb/Core/Error.h"
 #include "lldb/Core/Log.h"
@@ -24,6 +23,7 @@
 #include "lldb/Core/ModuleList.h"
 #include "lldb/Core/PluginManager.h"
 #include "lldb/Core/StreamString.h"
+#include "lldb/Host/ConnectionFileDescriptor.h"
 #include "lldb/Host/FileSpec.h"
 #include "lldb/Host/Host.h"
 #include "lldb/Target/Process.h"
@@ -56,7 +56,7 @@ PlatformRemoteGDBServer::Terminate ()
     }
 }
 
-Platform* 
+PlatformSP
 PlatformRemoteGDBServer::CreateInstance (bool force, const lldb_private::ArchSpec *arch)
 {
     bool create = force;
@@ -65,8 +65,8 @@ PlatformRemoteGDBServer::CreateInstance (bool force, const lldb_private::ArchSpe
         create = !arch->TripleVendorWasSpecified() && !arch->TripleOSWasSpecified();
     }
     if (create)
-        return new PlatformRemoteGDBServer ();
-    return NULL;
+        return PlatformSP(new PlatformRemoteGDBServer());
+    return PlatformSP();
 }
 
 
@@ -488,10 +488,16 @@ PlatformRemoteGDBServer::DebugProcess (lldb_private::ProcessLaunchInfo &launch_i
                                                                 port + port_offset);
                         assert (connect_url_len < (int)sizeof(connect_url));
                         error = process_sp->ConnectRemote (NULL, connect_url);
+                        // Retry the connect remote one time...
+                        if (error.Fail())
+                            error = process_sp->ConnectRemote (NULL, connect_url);
                         if (error.Success())
                             error = process_sp->Launch(launch_info);
                         else if (debugserver_pid != LLDB_INVALID_PROCESS_ID)
+                        {
+                            printf ("error: connect remote failed (%s)\n", error.AsCString());
                             m_gdb_client.KillSpawnedProcess(debugserver_pid);
+                        }
                     }
                 }
             }

@@ -1457,7 +1457,7 @@ SymbolFileDWARF::ParseTemplateDIE (DWARFCompileUnit* dwarf_cu,
     case DW_TAG_template_type_parameter:
     case DW_TAG_template_value_parameter:
         {
-            const uint8_t *fixed_form_sizes = DWARFFormValue::GetFixedFormSizesForAddressSize (dwarf_cu->GetAddressByteSize());
+            const uint8_t *fixed_form_sizes = DWARFFormValue::GetFixedFormSizesForAddressSize (dwarf_cu->GetAddressByteSize(), dwarf_cu->IsDWARF64());
 
             DWARFDebugInfoEntry::Attributes attributes;
             const size_t num_attributes = die->GetAttributes (this, 
@@ -1752,7 +1752,7 @@ SymbolFileDWARF::ParseChildMembers
 
     size_t count = 0;
     const DWARFDebugInfoEntry *die;
-    const uint8_t *fixed_form_sizes = DWARFFormValue::GetFixedFormSizesForAddressSize (dwarf_cu->GetAddressByteSize());
+    const uint8_t *fixed_form_sizes = DWARFFormValue::GetFixedFormSizesForAddressSize (dwarf_cu->GetAddressByteSize(), dwarf_cu->IsDWARF64());
     uint32_t member_idx = 0;
     BitfieldInfo last_field_info;
     ModuleSP module = GetObjectFile()->GetModule();
@@ -2990,7 +2990,7 @@ SymbolFileDWARF::ResolveSymbolContext(const FileSpec& file_spec, uint32_t line, 
 
                                                     if (block_die != NULL)
                                                         sc.block = block.FindBlockByID (MakeUserID(block_die->GetOffset()));
-                                                    else
+                                                    else if (function_die != NULL)
                                                         sc.block = block.FindBlockByID (MakeUserID(function_die->GetOffset()));
                                                 }
                                             }
@@ -3197,13 +3197,13 @@ SymbolFileDWARF::FindGlobalVariables (const ConstString &name, const lldb_privat
         if (m_apple_names_ap.get())
         {
             const char *name_cstr = name.GetCString();
-            const char *base_name_start;
-            const char *base_name_end = NULL;
+            llvm::StringRef basename;
+            llvm::StringRef context;
 
-            if (!CPPLanguageRuntime::StripNamespacesFromVariableName(name_cstr, base_name_start, base_name_end))
-                base_name_start = name_cstr;
+            if (!CPPLanguageRuntime::ExtractContextAndIdentifier(name_cstr, context, basename))
+                basename = name_cstr;
 
-            m_apple_names_ap->FindByName (base_name_start, die_offsets);
+            m_apple_names_ap->FindByName (basename.data(), die_offsets);
         }
     }
     else
@@ -3402,7 +3402,7 @@ SymbolFileDWARF::ResolveFunction (DWARFCompileUnit *cu,
                 break;
         }
     }
-    assert (die->Tag() == DW_TAG_subprogram);
+    assert (die && die->Tag() == DW_TAG_subprogram);
     if (GetFunction (cu, die, sc))
     {
         Address addr;
@@ -4231,7 +4231,7 @@ SymbolFileDWARF::ParseChildParameters (const SymbolContext& sc,
     if (parent_die == NULL)
         return 0;
 
-    const uint8_t *fixed_form_sizes = DWARFFormValue::GetFixedFormSizesForAddressSize (dwarf_cu->GetAddressByteSize());
+    const uint8_t *fixed_form_sizes = DWARFFormValue::GetFixedFormSizesForAddressSize (dwarf_cu->GetAddressByteSize(), dwarf_cu->IsDWARF64());
 
     size_t arg_idx = 0;
     const DWARFDebugInfoEntry *die;
@@ -4409,7 +4409,7 @@ SymbolFileDWARF::ParseChildEnumerators
 
     size_t enumerators_added = 0;
     const DWARFDebugInfoEntry *die;
-    const uint8_t *fixed_form_sizes = DWARFFormValue::GetFixedFormSizesForAddressSize (dwarf_cu->GetAddressByteSize());
+    const uint8_t *fixed_form_sizes = DWARFFormValue::GetFixedFormSizesForAddressSize (dwarf_cu->GetAddressByteSize(), dwarf_cu->IsDWARF64());
 
     for (die = parent_die->GetFirstChild(); die != NULL; die = die->GetSibling())
     {
@@ -4488,7 +4488,7 @@ SymbolFileDWARF::ParseChildArrayInfo
         return;
 
     const DWARFDebugInfoEntry *die;
-    const uint8_t *fixed_form_sizes = DWARFFormValue::GetFixedFormSizesForAddressSize (dwarf_cu->GetAddressByteSize());
+    const uint8_t *fixed_form_sizes = DWARFFormValue::GetFixedFormSizesForAddressSize (dwarf_cu->GetAddressByteSize(), dwarf_cu->IsDWARF64());
     for (die = parent_die->GetFirstChild(); die != NULL; die = die->GetSibling())
     {
         const dw_tag_t tag = die->Tag();
@@ -7114,7 +7114,7 @@ SymbolFileDWARF::ParseType (const SymbolContext& sc, DWARFCompileUnit* dwarf_cu,
                 {
                     symbol_context_scope = sc.comp_unit;
                 }
-                else if (sc.function != NULL)
+                else if (sc.function != NULL && sc_parent_die)
                 {
                     symbol_context_scope = sc.function->GetBlock(true).FindBlockByID(MakeUserID(sc_parent_die->GetOffset()));
                     if (symbol_context_scope == NULL)
@@ -7409,7 +7409,7 @@ SymbolFileDWARF::ParseVariableDIE
                             else if (DWARFFormValue::IsDataForm(form_value.Form()))
                             {
                                 // Retrieve the value as a data expression.
-                                const uint8_t *fixed_form_sizes = DWARFFormValue::GetFixedFormSizesForAddressSize (dwarf_cu->GetAddressByteSize());
+                                const uint8_t *fixed_form_sizes = DWARFFormValue::GetFixedFormSizesForAddressSize (dwarf_cu->GetAddressByteSize(), dwarf_cu->IsDWARF64());
                                 uint32_t data_offset = attributes.DIEOffsetAtIndex(i);
                                 uint32_t data_length = fixed_form_sizes[form_value.Form()];
                                 if (data_length == 0)
@@ -7417,7 +7417,7 @@ SymbolFileDWARF::ParseVariableDIE
                                     const uint8_t *data_pointer = form_value.BlockData();
                                     if (data_pointer)
                                     {
-                                        data_length = form_value.Unsigned();
+                                        form_value.Unsigned();
                                     }
                                     else if (DWARFFormValue::IsDataForm(form_value.Form()))
                                     {
@@ -7433,7 +7433,7 @@ SymbolFileDWARF::ParseVariableDIE
                                 // Retrieve the value as a string expression.
                                 if (form_value.Form() == DW_FORM_strp)
                                 {
-                                    const uint8_t *fixed_form_sizes = DWARFFormValue::GetFixedFormSizesForAddressSize (dwarf_cu->GetAddressByteSize());
+                                    const uint8_t *fixed_form_sizes = DWARFFormValue::GetFixedFormSizesForAddressSize (dwarf_cu->GetAddressByteSize(), dwarf_cu->IsDWARF64());
                                     uint32_t data_offset = attributes.DIEOffsetAtIndex(i);
                                     uint32_t data_length = fixed_form_sizes[form_value.Form()];
                                     location.CopyOpcodeData(module, debug_info_data, data_offset, data_length);

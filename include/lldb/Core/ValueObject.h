@@ -88,6 +88,7 @@ public:
     {
         eExpressionPathScanEndReasonEndOfString = 1,           // out of data to parse
         eExpressionPathScanEndReasonNoSuchChild,               // child element not found
+        eExpressionPathScanEndReasonNoSuchSyntheticChild,      // (synthetic) child element not found
         eExpressionPathScanEndReasonEmptyRangeNotAllowed,      // [] only allowed for arrays
         eExpressionPathScanEndReasonDotInsteadOfArrow,         // . used when -> should be used
         eExpressionPathScanEndReasonArrowInsteadOfDot,         // -> used when . should be used
@@ -379,6 +380,9 @@ public:
     // this vends a TypeImpl that is useful at the SB API layer
     virtual TypeImpl
     GetTypeImpl ();
+    
+    virtual bool
+    CanProvideValue ();
 
     //------------------------------------------------------------------
     // Subclasses must implement the functions below.
@@ -608,6 +612,14 @@ public:
     GetSummaryAsCString (TypeSummaryImpl* summary_ptr,
                          std::string& destination);
     
+    const char *
+    GetSummaryAsCString (const TypeSummaryOptions& options);
+    
+    bool
+    GetSummaryAsCString (TypeSummaryImpl* summary_ptr,
+                         std::string& destination,
+                         const TypeSummaryOptions& options);
+    
     std::pair<TypeValidatorResult, std::string>
     GetValidationStatus ();
     
@@ -704,6 +716,10 @@ public:
     virtual bool
     IsSynthetic() { return false; }
     
+    lldb::ValueObjectSP
+    GetQualifiedRepresentationIfAvailable (lldb::DynamicValueType dynValue,
+                                           bool synthValue);
+    
     virtual lldb::ValueObjectSP
     CreateConstantValue (const ConstString &name);
 
@@ -756,6 +772,12 @@ public:
         return false;
     }
     
+    virtual bool
+    DoesProvideSyntheticValue ()
+    {
+        return false;
+    }
+    
     virtual SymbolContextScope *
     GetSymbolContextScope();
     
@@ -798,7 +820,7 @@ public:
     IsCStringContainer (bool check_pointer = false);
     
     size_t
-    ReadPointedString (Stream& s,
+    ReadPointedString (lldb::DataBufferSP& buffer_sp,
                        Error& error,
                        uint32_t max_length = 0,
                        bool honor_array = true,
@@ -837,6 +859,10 @@ public:
             ClearUserVisibleData(eClearUserVisibleDataItemsValue);
         m_format = format;
     }
+    
+    
+    virtual lldb::LanguageType
+    GetPreferredDisplayLanguage ();
     
     lldb::TypeSummaryImplSP
     GetSummaryFormat()
