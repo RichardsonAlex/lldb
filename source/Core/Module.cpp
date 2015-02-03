@@ -1309,6 +1309,10 @@ Module::GetObjectFile()
                 // unknown.
                 m_objfile_sp->GetArchitecture (m_arch);
             }
+            else
+            {
+                ReportError ("failed to load objfile for %s", GetFileSpec().GetPath().c_str());
+            }
         }
     }
     return m_objfile_sp.get();
@@ -1325,6 +1329,17 @@ Module::GetSectionList()
             obj_file->CreateSections(*GetUnifiedSectionList());
     }
     return m_sections_ap.get();
+}
+
+void
+Module::SectionFileAddressesChanged ()
+{
+    ObjectFile *obj_file = GetObjectFile ();
+    if (obj_file)
+        obj_file->SectionFileAddressesChanged ();
+    SymbolVendor* sym_vendor = GetSymbolVendor();
+    if (sym_vendor)
+        sym_vendor->SectionFileAddressesChanged ();
 }
 
 SectionList *

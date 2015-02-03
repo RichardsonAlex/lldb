@@ -103,16 +103,6 @@ ClangExpressionParser::ClangExpressionParser (ExecutionContextScope *exe_scope,
     m_compiler (),
     m_code_generator ()
 {
-    // Initialize targets first, so that --version shows registered targets.
-    static struct InitializeLLVM {
-        InitializeLLVM() {
-            llvm::InitializeAllTargets();
-            llvm::InitializeAllAsmPrinters();
-            llvm::InitializeAllTargetMCs();
-            llvm::InitializeAllDisassemblers();
-        }
-    } InitializeLLVM;
-
     // 1. Create a new compiler instance.
     m_compiler.reset(new CompilerInstance());
 
@@ -343,8 +333,8 @@ ClangExpressionParser::Parse (Stream &stream)
 
     if (!created_main_file)
     {
-        MemoryBuffer *memory_buffer = MemoryBuffer::getMemBufferCopy(expr_text, __FUNCTION__);
-        SourceMgr.setMainFileID(SourceMgr.createFileID(memory_buffer));
+        std::unique_ptr<MemoryBuffer> memory_buffer = MemoryBuffer::getMemBufferCopy(expr_text, __FUNCTION__);
+        SourceMgr.setMainFileID(SourceMgr.createFileID(std::move(memory_buffer)));
     }
 
     diag_buf->BeginSourceFile(m_compiler->getLangOpts(), &m_compiler->getPreprocessor());

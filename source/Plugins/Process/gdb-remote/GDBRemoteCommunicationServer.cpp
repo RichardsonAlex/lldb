@@ -1094,6 +1094,12 @@ GDBRemoteCommunicationServer::ProcessStateChanged (lldb_private::NativeProcessPr
     m_inferior_prev_state = state;
 }
 
+void
+GDBRemoteCommunicationServer::DidExec (NativeProcessProtocol *process)
+{
+    ClearProcessSpecificData ();
+}
+
 GDBRemoteCommunication::PacketResult
 GDBRemoteCommunicationServer::SendONotification (const char *buffer, uint32_t len)
 {
@@ -1328,6 +1334,9 @@ CreateProcessInfoResponse_DebugServerStyle (const ProcessInstanceInfo &proc_info
     const ArchSpec &proc_arch = proc_info.GetArchitecture();
     if (proc_arch.IsValid())
     {
+        const llvm::Triple &proc_triple = proc_arch.GetTriple();
+#if defined(__APPLE__)
+        // We'll send cputype/cpusubtype.
         const uint32_t cpu_type = proc_arch.GetMachOCPUType();
         if (cpu_type != 0)
             response.Printf ("cputype:%" PRIx32 ";", cpu_type);
@@ -1335,12 +1344,15 @@ CreateProcessInfoResponse_DebugServerStyle (const ProcessInstanceInfo &proc_info
         const uint32_t cpu_subtype = proc_arch.GetMachOCPUSubType();
         if (cpu_subtype != 0)
             response.Printf ("cpusubtype:%" PRIx32 ";", cpu_subtype);
+
         
-        const llvm::Triple &proc_triple = proc_arch.GetTriple();
         const std::string vendor = proc_triple.getVendorName ();
         if (!vendor.empty ())
             response.Printf ("vendor:%s;", vendor.c_str ());
-
+#else
+        // We'll send the triple.
+        response.Printf ("triple:%s;", proc_triple.getTriple().c_str ());
+#endif
         std::string ostype = proc_triple.getOSName ();
         // Adjust so ostype reports ios for Apple/ARM and Apple/ARM64.
         if (proc_triple.getVendor () == llvm::Triple::Apple)
@@ -4283,3 +4295,20 @@ GDBRemoteCommunicationServer::GetNextSavedRegistersID ()
     return m_next_saved_registers_id++;
 }
 
+void
+GDBRemoteCommunicationServer::ClearProcessSpecificData ()
+{
+    Log *log (GetLogIfAnyCategoriesSet(LIBLLDB_LOG_PROCESS|GDBR_LOG_PROCESS));
+    if (log)
+        log->Printf ("GDBRemoteCommunicationServer::%s()", __FUNCTION__);
+
+    // Clear any auxv cached data.
+    // *BSD impls should be able to do this too.
+#if defined(__linux__)
+    if (log)
+        log->Printf ("GDBRemoteCommunicationServer::%s clearing auxv buffer (previously %s)",
+                     __FUNCTION__,
+                     m_active_auxv_buffer_sp ? "was set" : "was not set");
+    m_active_auxv_buffer_sp.reset ();
+#endif
+}

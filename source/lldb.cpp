@@ -25,6 +25,7 @@
 #include "lldb/Target/Thread.h"
 
 #include "llvm/ADT/StringRef.h"
+#include "llvm/Support/TargetSelect.h"
 
 #include "Plugins/ABI/MacOSX-i386/ABIMacOSX_i386.h"
 #include "Plugins/ABI/MacOSX-arm/ABIMacOSX_arm.h"
@@ -91,9 +92,16 @@
 #include "Plugins/Platform/gdb-server/PlatformRemoteGDBServer.h"
 #include "Plugins/Process/gdb-remote/ProcessGDBRemote.h"
 #include "Plugins/DynamicLoader/Static/DynamicLoaderStatic.h"
+#include "Plugins/MemoryHistory/asan/MemoryHistoryASan.h"
 
 using namespace lldb;
 using namespace lldb_private;
+
+static void fatal_error_handler(void *user_data, const std::string& reason,
+                                bool gen_crash_diag) {
+    Host::SetCrashDescription(reason.c_str());
+    ::abort();
+}
 
 void
 lldb_private::Initialize ()
@@ -110,7 +118,15 @@ lldb_private::Initialize ()
         HostInfo::Initialize();
         Timer::Initialize ();
         Timer scoped_timer (__PRETTY_FUNCTION__, __PRETTY_FUNCTION__);
-        
+
+        // Initialize LLVM and Clang
+        llvm::InitializeAllTargets();
+        llvm::InitializeAllAsmPrinters();
+        llvm::InitializeAllTargetMCs();
+        llvm::InitializeAllDisassemblers();
+        llvm::install_fatal_error_handler(fatal_error_handler, 0);
+
+        // Initialize plug-ins
         ABIMacOSX_i386::Initialize();
         ABIMacOSX_arm::Initialize();
         ABIMacOSX_arm64::Initialize();
@@ -139,6 +155,7 @@ lldb_private::Initialize ()
 #endif
         JITLoaderGDB::Initialize();
         ProcessElfCore::Initialize();
+        MemoryHistoryASan::Initialize();
         
 #if defined (__APPLE__)
         //----------------------------------------------------------------------
@@ -229,6 +246,7 @@ lldb_private::Terminate ()
 #endif
     JITLoaderGDB::Terminate();
     ProcessElfCore::Terminate();
+    MemoryHistoryASan::Terminate();
     
 #if defined (__APPLE__)
     DynamicLoaderMacOSXDYLD::Terminate();

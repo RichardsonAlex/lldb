@@ -66,6 +66,7 @@
 #include "lldb/Host/FileSpec.h"
 #include "lldb/Host/FileSystem.h"
 #include "lldb/Host/Mutex.h"
+#include "lldb/lldb-private-forward.h"
 #include "lldb/Target/FileAction.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/ProcessLaunchInfo.h"
@@ -131,7 +132,18 @@ Host::StartMonitoringChildProcess
     info_ptr->monitor_signals = monitor_signals;
     
     char thread_name[256];
-    ::snprintf (thread_name, sizeof(thread_name), "<lldb.host.wait4(pid=%" PRIu64 ")>", pid);
+
+    if (Host::MAX_THREAD_NAME_LENGTH <= 16)
+    {
+        // On some platforms, the thread name is limited to 16 characters.  We need to
+        // abbreviate there or the pid info would get truncated.
+        ::snprintf (thread_name, sizeof(thread_name), "wait4(%" PRIu64 ")", pid);
+    }
+    else
+    {
+        ::snprintf (thread_name, sizeof(thread_name), "<lldb.host.wait4(pid=%" PRIu64 ")>", pid);
+    }
+
     thread = ThreadCreate (thread_name,
                            MonitorChildProcessThreadFunction,
                            info_ptr,
@@ -663,130 +675,6 @@ Host::ResolveExecutableInBundle (FileSpec &file)
 #endif
 
 #ifndef _WIN32
-
-// Opaque info that tracks a dynamic library that was loaded
-struct DynamicLibraryInfo
-{
-    DynamicLibraryInfo (const FileSpec &fs, int o, void *h) :
-        file_spec (fs),
-        open_options (o),
-        handle (h)
-    {
-    }
-
-    const FileSpec file_spec;
-    uint32_t open_options;
-    void * handle;
-};
-
-void *
-Host::DynamicLibraryOpen (const FileSpec &file_spec, uint32_t options, Error &error)
-{
-    char path[PATH_MAX];
-    if (file_spec.GetPath(path, sizeof(path)))
-    {
-        int mode = 0;
-        
-        if (options & eDynamicLibraryOpenOptionLazy)
-            mode |= RTLD_LAZY;
-        else
-            mode |= RTLD_NOW;
-
-    
-        if (options & eDynamicLibraryOpenOptionLocal)
-            mode |= RTLD_LOCAL;
-        else
-            mode |= RTLD_GLOBAL;
-
-#ifdef LLDB_CONFIG_DLOPEN_RTLD_FIRST_SUPPORTED
-        if (options & eDynamicLibraryOpenOptionLimitGetSymbol)
-            mode |= RTLD_FIRST;
-#endif
-        
-        void * opaque = ::dlopen (path, mode);
-
-        if (opaque)
-        {
-            error.Clear();
-            return new DynamicLibraryInfo (file_spec, options, opaque);
-        }
-        else
-        {
-            error.SetErrorString(::dlerror());
-        }
-    }
-    else 
-    {
-        error.SetErrorString("failed to extract path");
-    }
-    return NULL;
-}
-
-Error
-Host::DynamicLibraryClose (void *opaque)
-{
-    Error error;
-    if (opaque == NULL)
-    {
-        error.SetErrorString ("invalid dynamic library handle");
-    }
-    else
-    {
-        DynamicLibraryInfo *dylib_info = (DynamicLibraryInfo *) opaque;
-        if (::dlclose (dylib_info->handle) != 0)
-        {
-            error.SetErrorString(::dlerror());
-        }
-        
-        dylib_info->open_options = 0;
-        dylib_info->handle = 0;
-        delete dylib_info;
-    }
-    return error;
-}
-
-void *
-Host::DynamicLibraryGetSymbol (void *opaque, const char *symbol_name, Error &error)
-{
-    if (opaque == NULL)
-    {
-        error.SetErrorString ("invalid dynamic library handle");
-    }
-    else
-    {
-        DynamicLibraryInfo *dylib_info = (DynamicLibraryInfo *) opaque;
-
-        void *symbol_addr = ::dlsym (dylib_info->handle, symbol_name);
-        if (symbol_addr)
-        {
-#ifndef LLDB_CONFIG_DLOPEN_RTLD_FIRST_SUPPORTED
-            // This host doesn't support limiting searches to this shared library
-            // so we need to verify that the match came from this shared library
-            // if it was requested in the Host::DynamicLibraryOpen() function.
-            if (dylib_info->open_options & eDynamicLibraryOpenOptionLimitGetSymbol)
-            {
-                FileSpec match_dylib_spec (Host::GetModuleFileSpecForHostAddress (symbol_addr));
-                if (match_dylib_spec != dylib_info->file_spec)
-                {
-                    char dylib_path[PATH_MAX];
-                    if (dylib_info->file_spec.GetPath (dylib_path, sizeof(dylib_path)))
-                        error.SetErrorStringWithFormat ("symbol not found in \"%s\"", dylib_path);
-                    else
-                        error.SetErrorString ("symbol not found");
-                    return NULL;
-                }
-            }
-#endif
-            error.Clear();
-            return symbol_addr;
-        }
-        else
-        {
-            error.SetErrorString(::dlerror());
-        }
-    }
-    return NULL;
-}
 
 FileSpec
 Host::GetModuleFileSpecForHostAddress (const void *host_addr)
@@ -1472,6 +1360,17 @@ lldb::pid_t
 Host::LaunchApplication (const FileSpec &app_file_spec)
 {
     return LLDB_INVALID_PROCESS_ID;
+}
+
+#endif
+
+#if !defined (__linux__) && !defined (__FreeBSD__) && !defined (__NetBSD__)
+
+const lldb_private::UnixSignalsSP&
+Host::GetUnixSignals ()
+{
+    static UnixSignalsSP s_unix_signals_sp (new UnixSignals ());
+    return s_unix_signals_sp;
 }
 
 #endif

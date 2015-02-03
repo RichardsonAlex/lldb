@@ -70,8 +70,8 @@ ProcessPOSIX::Initialize()
 //------------------------------------------------------------------------------
 // Constructors and destructors.
 
-ProcessPOSIX::ProcessPOSIX(Target& target, Listener &listener)
-    : Process(target, listener),
+ProcessPOSIX::ProcessPOSIX(Target& target, Listener &listener, UnixSignalsSP &unix_signals_sp)
+    : Process(target, listener, unix_signals_sp),
       m_byte_order(lldb::endian::InlHostByteOrder()),
       m_monitor(NULL),
       m_module(NULL),
@@ -642,6 +642,7 @@ ProcessPOSIX::DoDeallocateMemory(lldb::addr_t addr)
 size_t
 ProcessPOSIX::GetSoftwareBreakpointTrapOpcode(BreakpointSite* bp_site)
 {
+    static const uint8_t g_aarch64_opcode[] = { 0x00, 0x00, 0x20, 0xD4 };
     static const uint8_t g_i386_opcode[] = { 0xCC };
 
     ArchSpec arch = GetTarget().GetArchitecture();
@@ -652,6 +653,11 @@ ProcessPOSIX::GetSoftwareBreakpointTrapOpcode(BreakpointSite* bp_site)
     {
     default:
         assert(false && "CPU type not supported!");
+        break;
+
+    case llvm::Triple::aarch64:
+        opcode = g_aarch64_opcode;
+        opcode_size = sizeof(g_aarch64_opcode);
         break;
 
     case llvm::Triple::x86:
@@ -870,12 +876,6 @@ ProcessPOSIX::PutSTDIN(const char *buf, size_t len, Error &error)
         return 0;
     }
     return status;
-}
-
-UnixSignals &
-ProcessPOSIX::GetUnixSignals()
-{
-    return m_signals;
 }
 
 //------------------------------------------------------------------------------

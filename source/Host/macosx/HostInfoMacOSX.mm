@@ -30,6 +30,16 @@
 #include <mach-o/dyld.h>
 #include <objc/objc-auto.h>
 
+// These are needed when compiling on systems
+// that do not yet have these definitions
+#include <AvailabilityMacros.h>
+#ifndef CPU_SUBTYPE_X86_64_H
+#define CPU_SUBTYPE_X86_64_H ((cpu_subtype_t)8)
+#endif
+#ifndef CPU_TYPE_ARM64
+#define CPU_TYPE_ARM64 (CPU_TYPE_ARM|CPU_ARCH_ABI64)
+#endif
+
 using namespace lldb_private;
 
 bool
@@ -139,7 +149,7 @@ HostInfoMacOSX::ComputeSupportExeDirectory(FileSpec &file_spec)
         ::strncpy(framework_pos, "/Resources", PATH_MAX - (framework_pos - raw_path));
 #endif
     }
-    file_spec.SetFile(raw_path, true);
+    file_spec.GetDirectory().SetCString(raw_path);
     return (bool)file_spec.GetDirectory();
 }
 
@@ -159,7 +169,7 @@ HostInfoMacOSX::ComputeHeaderDirectory(FileSpec &file_spec)
         framework_pos += strlen("LLDB.framework");
         ::strncpy(framework_pos, "/Headers", PATH_MAX - (framework_pos - raw_path));
     }
-    file_spec.SetFile(raw_path, true);
+    file_spec.GetDirectory().SetCString(raw_path);
     return true;
 }
 
@@ -189,7 +199,7 @@ HostInfoMacOSX::ComputePythonDirectory(FileSpec &file_spec)
         // We may get our string truncated. Should we protect this with an assert?
         ::strncat(raw_path, python_version_dir.c_str(), sizeof(raw_path) - strlen(raw_path) - 1);
     }
-    file_spec.SetFile(raw_path, true);
+    file_spec.GetDirectory().SetCString(raw_path);
     return true;
 }
 
@@ -208,14 +218,15 @@ HostInfoMacOSX::ComputeSystemPluginsDirectory(FileSpec &file_spec)
 
     framework_pos += strlen("LLDB.framework");
     ::strncpy(framework_pos, "/Resources/PlugIns", PATH_MAX - (framework_pos - raw_path));
-    file_spec.SetFile(raw_path, true);
+    file_spec.GetDirectory().SetCString(raw_path);
     return true;
 }
 
 bool
 HostInfoMacOSX::ComputeUserPluginsDirectory(FileSpec &file_spec)
 {
-    file_spec.SetFile("~/Library/Application Support/LLDB/PlugIns", true);
+    FileSpec temp_file("~/Library/Application Support/LLDB/PlugIns", true);
+    file_spec.GetDirectory().SetCString(temp_file.GetPath().c_str());
     return true;
 }
 

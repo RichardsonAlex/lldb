@@ -32,6 +32,7 @@
 #include "lldb/Target/ABI.h"
 #include "lldb/Target/DynamicLoader.h"
 #include "lldb/Target/JITLoader.h"
+#include "lldb/Target/MemoryHistory.h"
 #include "lldb/Target/OperatingSystem.h"
 #include "lldb/Target/LanguageRuntime.h"
 #include "lldb/Target/CPPLanguageRuntime.h"
@@ -108,6 +109,7 @@ g_properties[] =
     { "python-os-plugin-path", OptionValue::eTypeFileSpec, false, true, NULL, NULL, "A path to a python OS plug-in module file that contains a OperatingSystemPlugIn class." },
     { "stop-on-sharedlibrary-events" , OptionValue::eTypeBoolean, true, false, NULL, NULL, "If true, stop when a shared library is loaded or unloaded." },
     { "detach-keeps-stopped" , OptionValue::eTypeBoolean, true, false, NULL, NULL, "If true, detach will attempt to keep the process stopped." },
+    { "memory-cache-line-size" , OptionValue::eTypeUInt64, false, 512, NULL, NULL, "The memory cache line size" },
     {  NULL                  , OptionValue::eTypeInvalid, false, 0, NULL, NULL, NULL  }
 };
 
@@ -118,7 +120,8 @@ enum {
     ePropertyUnwindOnErrorInExpressions,
     ePropertyPythonOSPluginPath,
     ePropertyStopOnSharedLibraryEvents,
-    ePropertyDetachKeepsStopped
+    ePropertyDetachKeepsStopped,
+    ePropertyMemCacheLineSize
 };
 
 ProcessProperties::ProcessProperties (bool is_global) :
@@ -146,6 +149,13 @@ ProcessProperties::GetDisableMemoryCache() const
 {
     const uint32_t idx = ePropertyDisableMemCache;
     return m_collection_sp->GetPropertyAtIndexAsBoolean (NULL, idx, g_properties[idx].default_uint_value != 0);
+}
+
+uint64_t
+ProcessProperties::GetMemoryCacheLineSize() const
+{
+    const uint32_t idx = ePropertyMemCacheLineSize;
+    return m_collection_sp->GetPropertyAtIndexAsUInt64 (NULL, idx, g_properties[idx].default_uint_value);
 }
 
 Args
@@ -653,6 +663,13 @@ Process::GetStaticBroadcasterClass ()
 // Process constructor
 //----------------------------------------------------------------------
 Process::Process(Target &target, Listener &listener) :
+    Process(target, listener, Host::GetUnixSignals ())
+{
+    // This constructor just delegates to the full Process constructor,
+    // defaulting to using the Host's UnixSignals.
+}
+
+Process::Process(Target &target, Listener &listener, const UnixSignalsSP &unix_signals_sp) :
     ProcessProperties (false),
     UserID (LLDB_INVALID_PROCESS_ID),
     Broadcaster (&(target.GetDebugger()), "lldb.process"),
@@ -682,7 +699,7 @@ Process::Process(Target &target, Listener &listener) :
     m_listener (listener),
     m_breakpoint_site_list (),
     m_dynamic_checkers_ap (),
-    m_unix_signals (),
+    m_unix_signals_sp (unix_signals_sp),
     m_abi_sp (),
     m_process_input_reader (),
     m_stdio_communication ("process.stdio"),
@@ -712,6 +729,9 @@ Process::Process(Target &target, Listener &listener) :
     if (log)
         log->Printf ("%p Process::Process()", static_cast<void*>(this));
 
+    if (!m_unix_signals_sp)
+        m_unix_signals_sp.reset (new UnixSignals ());
+
     SetEventName (eBroadcastBitStateChanged, "state-changed");
     SetEventName (eBroadcastBitInterrupt, "interrupt");
     SetEventName (eBroadcastBitSTDOUT, "stdout-available");
@@ -737,6 +757,8 @@ Process::Process(Target &target, Listener &listener) :
                                                      eBroadcastInternalStateControlStop |
                                                      eBroadcastInternalStateControlPause |
                                                      eBroadcastInternalStateControlResume);
+    // We need something valid here, even if just the default UnixSignalsSP.
+    assert (m_unix_signals_sp && "null m_unix_signals_sp after initialization");
 }
 
 //----------------------------------------------------------------------
@@ -2891,12 +2913,25 @@ Process::GetSystemRuntime ()
     return m_system_runtime_ap.get();
 }
 
+Process::AttachCompletionHandler::AttachCompletionHandler (Process *process, uint32_t exec_count) :
+    NextEventAction (process),
+    m_exec_count (exec_count)
+{
+    Log *log(lldb_private::GetLogIfAllCategoriesSet (LIBLLDB_LOG_PROCESS));
+    if (log)
+        log->Printf ("Process::AttachCompletionHandler::%s process=%p, exec_count=%" PRIu32, __FUNCTION__, static_cast<void*>(process), exec_count);
+}
 
 Process::NextEventAction::EventActionResult
 Process::AttachCompletionHandler::PerformAction (lldb::EventSP &event_sp)
 {
+    Log *log(lldb_private::GetLogIfAllCategoriesSet (LIBLLDB_LOG_PROCESS));
+
     StateType state = ProcessEventData::GetStateFromEvent (event_sp.get());
-    switch (state) 
+    if (log)
+        log->Printf ("Process::AttachCompletionHandler::%s called with state %s (%d)", __FUNCTION__, StateAsCString(state), static_cast<int> (state));
+
+    switch (state)
     {
         case eStateRunning:
         case eStateConnected:
@@ -2914,11 +2949,18 @@ Process::AttachCompletionHandler::PerformAction (lldb::EventSP &event_sp)
                 if (m_exec_count > 0)
                 {
                     --m_exec_count;
+
+                    if (log)
+                        log->Printf ("Process::AttachCompletionHandler::%s state %s: reduced remaining exec count to %" PRIu32 ", requesting resume", __FUNCTION__, StateAsCString(state), m_exec_count);
+
                     RequestResume();
                     return eEventActionRetry;
                 }
                 else
                 {
+                    if (log)
+                        log->Printf ("Process::AttachCompletionHandler::%s state %s: no more execs expected to start, continuing with attach", __FUNCTION__, StateAsCString(state));
+
                     m_process->CompleteAttach ();
                     return eEventActionSuccess;
                 }
@@ -3100,13 +3142,26 @@ Process::Attach (ProcessAttachInfo &attach_info)
 void
 Process::CompleteAttach ()
 {
+    Log *log(lldb_private::GetLogIfAllCategoriesSet (LIBLLDB_LOG_PROCESS));
+    if (log)
+        log->Printf ("Process::%s()", __FUNCTION__);
+
     // Let the process subclass figure out at much as it can about the process
     // before we go looking for a dynamic loader plug-in.
     ArchSpec process_arch;
     DidAttach(process_arch);
     
     if (process_arch.IsValid())
+    {
         m_target.SetArchitecture(process_arch);
+        if (log)
+        {
+            const char *triple_str = process_arch.GetTriple().getTriple().c_str ();
+            log->Printf ("Process::%s replacing process architecture with DidAttach() architecture: %s",
+                         __FUNCTION__,
+                         triple_str ? triple_str : "<null>");
+        }
+    }
 
     // We just attached.  If we have a platform, ask it for the process architecture, and if it isn't
     // the same as the one we've already set, switch architectures.
@@ -3123,6 +3178,8 @@ Process::CompleteAttach ()
             {
                 m_target.SetPlatform (platform_sp);
                 m_target.SetArchitecture(platform_arch);
+                if (log)
+                    log->Printf ("Process::%s switching platform to %s and architecture to %s based on info from attach", __FUNCTION__, platform_sp->GetName().AsCString (""), platform_arch.GetTriple().getTriple().c_str ());
             }
         }
         else if (!process_arch.IsValid())
@@ -3131,7 +3188,11 @@ Process::CompleteAttach ()
             platform_sp->GetProcessInfo (GetID(), process_info);
             const ArchSpec &process_arch = process_info.GetArchitecture();
             if (process_arch.IsValid() && !m_target.GetArchitecture().IsExactMatch(process_arch))
+            {
                 m_target.SetArchitecture (process_arch);
+                if (log)
+                    log->Printf ("Process::%s switching architecture to %s based on info the platform retrieved for pid %" PRIu64, __FUNCTION__, process_arch.GetTriple().getTriple().c_str (), GetID ());
+            }
         }
     }
 
@@ -3139,13 +3200,33 @@ Process::CompleteAttach ()
     // plug-in
     DynamicLoader *dyld = GetDynamicLoader ();
     if (dyld)
+    {
         dyld->DidAttach();
+        if (log)
+        {
+            ModuleSP exe_module_sp = m_target.GetExecutableModule ();
+            log->Printf ("Process::%s after DynamicLoader::DidAttach(), target executable is %s (using %s plugin)",
+                         __FUNCTION__,
+                         exe_module_sp ? exe_module_sp->GetFileSpec().GetPath().c_str () : "<none>",
+                         dyld->GetPluginName().AsCString ("<unnamed>"));
+        }
+    }
 
     GetJITLoaders().DidAttach();
 
     SystemRuntime *system_runtime = GetSystemRuntime ();
     if (system_runtime)
+    {
         system_runtime->DidAttach();
+        if (log)
+        {
+            ModuleSP exe_module_sp = m_target.GetExecutableModule ();
+            log->Printf ("Process::%s after SystemRuntime::DidAttach(), target executable is %s (using %s plugin)",
+                         __FUNCTION__,
+                         exe_module_sp ? exe_module_sp->GetFileSpec().GetPath().c_str () : "<none>",
+                         system_runtime->GetPluginName().AsCString("<unnamed>"));
+        }
+    }
 
     m_os_ap.reset (OperatingSystem::FindPlugin (this, NULL));
     // Figure out which one is the executable, and set that in our target:
@@ -3165,7 +3246,16 @@ Process::CompleteAttach ()
         }
     }
     if (new_executable_module_sp)
+    {
         m_target.SetExecutableModule (new_executable_module_sp, false);
+        if (log)
+        {
+            ModuleSP exe_module_sp = m_target.GetExecutableModule ();
+            log->Printf ("Process::%s after looping through modules, target executable is %s",
+                         __FUNCTION__,
+                         exe_module_sp ? exe_module_sp->GetFileSpec().GetPath().c_str () : "<none>");
+        }
+    }
 }
 
 Error
@@ -5859,6 +5949,10 @@ Process::Flush ()
 void
 Process::DidExec ()
 {
+    Log *log(lldb_private::GetLogIfAllCategoriesSet (LIBLLDB_LOG_PROCESS));
+    if (log)
+        log->Printf ("Process::%s()", __FUNCTION__);
+
     Target &target = GetTarget();
     target.CleanupProcess ();
     target.ClearModules(false);
@@ -5928,4 +6022,20 @@ Process::ModulesDidLoad (ModuleList &module_list)
   }
 
   GetJITLoaders().ModulesDidLoad (module_list);
+}
+
+ThreadCollectionSP
+Process::GetHistoryThreads(lldb::addr_t addr)
+{
+    ThreadCollectionSP threads;
+    
+    const MemoryHistorySP &memory_history = MemoryHistory::FindPlugin(shared_from_this());
+    
+    if (! memory_history.get()) {
+        return threads;
+    }
+    
+    threads.reset(new ThreadCollection(memory_history->GetHistoryThreads(addr)));
+    
+    return threads;
 }
