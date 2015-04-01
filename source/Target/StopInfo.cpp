@@ -24,6 +24,7 @@
 #include "lldb/Breakpoint/Watchpoint.h"
 #include "lldb/Core/Debugger.h"
 #include "lldb/Core/StreamString.h"
+#include "lldb/Core/ValueObject.h"
 #include "lldb/Expression/ClangUserExpression.h"
 #include "lldb/Target/Target.h"
 #include "lldb/Target/Thread.h"
@@ -479,7 +480,12 @@ protected:
                                                  condition_says_stop);
                                 }
                                 if (!condition_says_stop)
+                                {
+                                    // We don't want to increment the hit count of breakpoints if the condition fails.
+                                    // We've already bumped it by the time we get here, so undo the bump:
+                                    bp_loc_sp->UndoBumpHitCount();
                                     continue;
+                                }
                             }
                         }
 

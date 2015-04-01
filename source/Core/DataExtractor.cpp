@@ -22,7 +22,7 @@
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/MathExtras.h"
-
+#include "llvm/Support/MD5.h"
 
 #include "lldb/Core/DataBufferHeap.h"
 #include "lldb/Core/DataExtractor.h"
@@ -1710,7 +1710,7 @@ DataExtractor::Dump (Stream *s,
             {
                 size_t complex_int_byte_size = item_byte_size / 2;
                 
-                if (complex_int_byte_size <= 8)
+                if (complex_int_byte_size > 0 && complex_int_byte_size <= 8)
                 {
                     s->Printf("%" PRIu64, GetMaxU64Bitfield(&offset, complex_int_byte_size, 0, 0));
                     s->Printf(" + %" PRIu64 "i", GetMaxU64Bitfield(&offset, complex_int_byte_size, 0, 0));
@@ -2269,3 +2269,27 @@ DataExtractor::Append(void* buf, offset_t length)
     
     return true;
 }
+
+void
+DataExtractor::Checksum (llvm::SmallVectorImpl<uint8_t> &dest,
+                         uint64_t max_data)
+{
+    if (max_data == 0)
+        max_data = GetByteSize();
+    else
+        max_data = std::min(max_data, GetByteSize());
+
+    llvm::MD5 md5;
+
+    const llvm::ArrayRef<uint8_t> data(GetDataStart(),max_data);
+    md5.update(data);
+
+    llvm::MD5::MD5Result result;
+    md5.final(result);
+
+    dest.resize(16);
+    std::copy(result,
+              result+16,
+              dest.begin());
+}
+

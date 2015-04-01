@@ -11,7 +11,10 @@
 #define liblldb_NativeThreadLinux_H_
 
 #include "lldb/lldb-private-forward.h"
-#include "../../../Host/common/NativeThreadProtocol.h"
+#include "lldb/Host/common/NativeThreadProtocol.h"
+
+#include <map>
+#include <string>
 
 namespace lldb_private
 {
@@ -34,7 +37,7 @@ namespace lldb_private
         GetState () override;
 
         bool
-        GetStopReason (ThreadStopInfo &stop_info) override;
+        GetStopReason (ThreadStopInfo &stop_info, std::string& description) override;
 
         NativeRegisterContextSP
         GetRegisterContext () override;
@@ -44,9 +47,6 @@ namespace lldb_private
 
         Error
         RemoveWatchpoint (lldb::addr_t addr) override;
-
-        uint32_t
-        TranslateStopInfoToGdbSignal (const ThreadStopInfo &stop_info) const override;
 
     private:
         // ---------------------------------------------------------------------
@@ -76,11 +76,20 @@ namespace lldb_private
         void
         SetStoppedByBreakpoint ();
 
+        void
+        SetStoppedByWatchpoint (uint32_t wp_index);
+
         bool
         IsStoppedAtBreakpoint ();
 
+        bool
+        IsStoppedAtWatchpoint ();
+
         void
-        SetCrashedWithException (uint64_t exception_type, lldb::addr_t exception_addr);
+        SetStoppedByTrace ();
+
+        void
+        SetCrashedWithException (const siginfo_t& info);
 
         void
         SetSuspended ();
@@ -100,6 +109,9 @@ namespace lldb_private
         lldb::StateType m_state;
         ThreadStopInfo m_stop_info;
         NativeRegisterContextSP m_reg_context_sp;
+        std::string m_stop_description;
+        using WatchpointIndexMap = std::map<lldb::addr_t, uint32_t>;
+        WatchpointIndexMap m_watchpoint_index_map;
     };
 }
 

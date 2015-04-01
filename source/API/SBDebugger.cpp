@@ -33,11 +33,11 @@
 #include "lldb/API/SBTypeSummary.h"
 #include "lldb/API/SBTypeSynthetic.h"
 
-
 #include "lldb/Core/Debugger.h"
 #include "lldb/Core/State.h"
 #include "lldb/Core/StreamFile.h"
 #include "lldb/DataFormatters/DataVisualization.h"
+#include "lldb/Initialization/InitializeLLDB.h"
 #include "lldb/Interpreter/Args.h"
 #include "lldb/Interpreter/CommandInterpreter.h"
 #include "lldb/Interpreter/OptionGroupPlatform.h"
@@ -117,13 +117,13 @@ SBDebugger::Initialize ()
 
     SBCommandInterpreter::InitializeSWIG ();
 
-    Debugger::Initialize(LoadPlugin);
+    lldb_private::Initialize(LoadPlugin);
 }
 
 void
 SBDebugger::Terminate ()
 {
-    Debugger::Terminate();
+    lldb_private::Terminate();
 }
 
 void
@@ -715,16 +715,13 @@ SBDebugger::CreateTarget (const char *filename)
     TargetSP target_sp;
     if (m_opaque_sp)
     {
-        ArchSpec arch = Target::GetDefaultArchitecture ();
         Error error;
         const bool add_dependent_modules = true;
-
-        PlatformSP platform_sp(m_opaque_sp->GetPlatformList().GetSelectedPlatform());
-        error = m_opaque_sp->GetTargetList().CreateTarget (*m_opaque_sp, 
+        error = m_opaque_sp->GetTargetList().CreateTarget (*m_opaque_sp,
                                                            filename, 
-                                                           arch, 
+                                                           NULL,
                                                            add_dependent_modules, 
-                                                           platform_sp,
+                                                           NULL,
                                                            target_sp);
 
         if (error.Success())

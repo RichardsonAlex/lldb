@@ -191,7 +191,7 @@ ProcessElfCore::DoLoadCore ()
     const uint32_t num_segments = core->GetProgramHeaderCount();
     if (num_segments == 0)
     {
-        error.SetErrorString ("core file has no sections");
+        error.SetErrorString ("core file has no segments");
         return error;
     }
 
@@ -405,14 +405,19 @@ enum {
     NT_AUXV
 };
 
+namespace FREEBSD {
+
 enum {
-    NT_FREEBSD_PRSTATUS      = 1,
-    NT_FREEBSD_FPREGSET,
-    NT_FREEBSD_PRPSINFO,
-    NT_FREEBSD_THRMISC       = 7,
-    NT_FREEBSD_PROCSTAT_AUXV = 16,
-    NT_FREEBSD_CAPREGSET     = 20,
+    NT_PRSTATUS      = 1,
+    NT_FPREGSET,
+    NT_PRPSINFO,
+    NT_THRMISC       = 7,
+    NT_PROCSTAT_AUXV = 16,
+    NT_CAPREGSET     = 20,
+    NT_PPC_VMX       = 0x100
 };
+
+}
 
 // Parse a FreeBSD NT_PRSTATUS note - see FreeBSD sys/procfs.h for details.
 static void
@@ -519,25 +524,28 @@ ProcessElfCore::ParseThreadContextsFromNoteSegment(const elf::ELFProgramHeader *
             m_os = llvm::Triple::FreeBSD;
             switch (note.n_type)
             {
-                case NT_FREEBSD_PRSTATUS:
+                case FREEBSD::NT_PRSTATUS:
                     have_prstatus = true;
                     ParseFreeBSDPrStatus(*thread_data, note_data, arch);
                     break;
-                case NT_FREEBSD_FPREGSET:
+                case FREEBSD::NT_FPREGSET:
                     thread_data->fpregset = note_data;
                     break;
-                case NT_FREEBSD_CAPREGSET:
+                case FREEBSD::NT_CAPREGSET:
                     thread_data->capregset = note_data;
                     break;
-                case NT_FREEBSD_PRPSINFO:
+                case FREEBSD::NT_PRPSINFO:
                     have_prpsinfo = true;
                     break;
-                case NT_FREEBSD_THRMISC:
+                case FREEBSD::NT_THRMISC:
                     ParseFreeBSDThrMisc(*thread_data, note_data);
                     break;
-                case NT_FREEBSD_PROCSTAT_AUXV:
+                case FREEBSD::NT_PROCSTAT_AUXV:
                     // FIXME: FreeBSD sticks an int at the beginning of the note
                     m_auxv = DataExtractor(segment_data, note_start + 4, note_size - 4);
+                    break;
+                case FREEBSD::NT_PPC_VMX:
+                    thread_data->vregset = note_data;
                     break;
                 default:
                     break;

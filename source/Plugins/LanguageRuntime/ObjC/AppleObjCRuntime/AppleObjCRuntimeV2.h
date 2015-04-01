@@ -99,8 +99,8 @@ public:
     virtual ClassDescriptorSP
     GetClassDescriptorFromISA (ObjCISA isa);
     
-    virtual TypeVendor *
-    GetTypeVendor();
+    virtual DeclVendor *
+    GetDeclVendor();
     
     virtual lldb::addr_t
     LookupRuntimeSymbol (const ConstString &name);
@@ -240,6 +240,31 @@ private:
         DISALLOW_COPY_AND_ASSIGN(TaggedPointerVendorLegacy);
     };
     
+    struct DescriptorMapUpdateResult
+    {
+        bool update_ran;
+        bool any_found;
+        
+        DescriptorMapUpdateResult (bool ran,
+                                   bool found)
+        {
+            update_ran = ran;
+            any_found = found;
+        }
+        
+        static DescriptorMapUpdateResult
+        Fail ()
+        {
+            return {false, false};
+        }
+        
+        static DescriptorMapUpdateResult
+        Success ()
+        {
+            return {true, true};
+        }
+    };
+    
     AppleObjCRuntimeV2 (Process *process,
                         const lldb::ModuleSP &objc_module_sp);
     
@@ -258,12 +283,15 @@ private:
     bool
     UpdateISAToDescriptorMapDynamic(RemoteNXMapTable &hash_table);
     
-    void
+    uint32_t
     ParseClassInfoArray (const lldb_private::DataExtractor &data,
                          uint32_t num_class_infos);
     
-    bool
+    DescriptorMapUpdateResult
     UpdateISAToDescriptorMapSharedCache ();
+    
+    void
+    WarnIfNoClassesCached ();
 
     lldb::addr_t
     GetSharedCacheReadOnlyAddress();
@@ -280,7 +308,7 @@ private:
     lldb::addr_t                            m_get_shared_cache_class_info_args;
     Mutex                                   m_get_shared_cache_class_info_args_mutex;
 
-    std::unique_ptr<TypeVendor>               m_type_vendor_ap;
+    std::unique_ptr<DeclVendor>               m_decl_vendor_ap;
     lldb::addr_t                            m_isa_hash_table_ptr;
     HashTableSignature                      m_hash_signature;
     bool                                    m_has_object_getClass;
@@ -288,6 +316,7 @@ private:
     std::unique_ptr<NonPointerISACache>       m_non_pointer_isa_cache_ap;
     std::unique_ptr<TaggedPointerVendor>    m_tagged_pointer_vendor_ap;
     EncodingToTypeSP                        m_encoding_to_type_sp;
+    bool                                    m_noclasses_warning_emitted;
 };
     
 } // namespace lldb_private

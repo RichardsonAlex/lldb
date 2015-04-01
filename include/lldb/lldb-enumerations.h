@@ -49,8 +49,10 @@ namespace lldb {
         eLaunchFlagLaunchInSeparateProcessGroup = (1u << 7), ///< Launch the process in a separate process group
         eLaunchFlagDontSetExitStatus = (1u << 8), ///< If you are going to hand the process off (e.g. to debugserver)
                                                    ///< set this flag so lldb & the handee don't race to set its exit status.
-        eLaunchFlagDetachOnError = (1u << 9)      ///< If set, then the client stub should detach rather than killing the debugee
+        eLaunchFlagDetachOnError = (1u << 9),     ///< If set, then the client stub should detach rather than killing the debugee
                                                    ///< if it loses connection with lldb.
+        eLaunchFlagShellExpandArguments  = (1u << 10),       ///< Perform shell-style argument expansion
+        eLaunchFlagCloseTTYOnExit = (1u << 11),    ///< Close the open TTY on exit
     } LaunchFlags;
         
     //----------------------------------------------------------------------
@@ -291,7 +293,11 @@ namespace lldb {
         eSymbolContextBlock      = (1u << 4), ///< Set when the deepest \a block is requested from a query, or was located in query results
         eSymbolContextLineEntry  = (1u << 5), ///< Set when \a line_entry is requested from a query, or was located in query results
         eSymbolContextSymbol     = (1u << 6), ///< Set when \a symbol is requested from a query, or was located in query results
-        eSymbolContextEverything = ((eSymbolContextSymbol << 1) - 1u)  ///< Indicates to try and lookup everything up during a query.
+        eSymbolContextEverything = ((eSymbolContextSymbol << 1) - 1u),  ///< Indicates to try and lookup everything up during a routine symbol context query.
+        eSymbolContextVariable   = (1u << 7)  ///< Set when \a global or static variable is requested from a query, or was located in query results.
+                                              ///< eSymbolContextVariable is potentially expensive to lookup so it isn't included in
+                                              ///< eSymbolContextEverything which stops it from being used during frame PC lookups and
+                                              ///< many other potential address to symbol context lookups.
     } SymbolContextItem;
 
     typedef enum Permissions
@@ -375,6 +381,8 @@ namespace lldb {
         eLanguageTypeUPC             = 0x0012,   ///< Unified Parallel C.
         eLanguageTypeD               = 0x0013,   ///< D.
         eLanguageTypePython          = 0x0014,   ///< Python.
+        // NOTE: The below are DWARF5 constants, subject to change upon
+        // completion of the DWARF5 specification
         eLanguageTypeOpenCL          = 0x0015,   ///< OpenCL.
         eLanguageTypeGo              = 0x0016,   ///< Go.
         eLanguageTypeModula3         = 0x0017,   ///< Modula 3.
@@ -387,6 +395,9 @@ namespace lldb {
         eLanguageTypeSwift           = 0x001e,   ///< Swift.
         eLanguageTypeJulia           = 0x001f,   ///< Julia.
         eLanguageTypeDylan           = 0x0020,   ///< Dylan.
+        eLanguageTypeC_plus_plus_14  = 0x0021,   ///< ISO C++:2014.
+        eLanguageTypeFortran03       = 0x0022,   ///< ISO Fortran 2003.
+        eLanguageTypeFortran08       = 0x0023,   ///< ISO Fortran 2008.
         eNumLanguageTypes
     } LanguageType;
     
@@ -421,6 +432,7 @@ namespace lldb {
         eArgTypeBoolean,
         eArgTypeBreakpointID,
         eArgTypeBreakpointIDRange,
+        eArgTypeBreakpointName,
         eArgTypeByteSize,
         eArgTypeClassName,
         eArgTypeCommandName,
@@ -571,6 +583,7 @@ namespace lldb {
         eSectionTypeELFRelocationEntries, // Elf SHT_REL or SHT_REL section
         eSectionTypeELFDynamicLinkInfo,   // Elf SHT_DYNAMIC section
         eSectionTypeEHFrame,
+        eSectionTypeCompactUnwind,        // compact unwind section in Mach-O, __TEXT,__unwind_info
         eSectionTypeOther
         
     } SectionType;
@@ -848,14 +861,15 @@ namespace lldb {
     //----------------------------------------------------------------------
     typedef enum PathType
     {
-        ePathTypeLLDBShlibDir,          // The directory where the lldb.so (unix) or LLDB mach-o file in LLDB.framework (MacOSX) exists
-        ePathTypeSupportExecutableDir,  // Find LLDB support executable directory (debugserver, etc)
-        ePathTypeHeaderDir,             // Find LLDB header file directory
-        ePathTypePythonDir,             // Find Python modules (PYTHONPATH) directory
-        ePathTypeLLDBSystemPlugins,     // System plug-ins directory
-        ePathTypeLLDBUserPlugins,       // User plug-ins directory
-        ePathTypeLLDBTempSystemDir      // The LLDB temp directory for this system that will be cleaned up on exit
-        
+        ePathTypeLLDBShlibDir,            // The directory where the lldb.so (unix) or LLDB mach-o file in LLDB.framework (MacOSX) exists
+        ePathTypeSupportExecutableDir,    // Find LLDB support executable directory (debugserver, etc)
+        ePathTypeHeaderDir,               // Find LLDB header file directory
+        ePathTypePythonDir,               // Find Python modules (PYTHONPATH) directory
+        ePathTypeLLDBSystemPlugins,       // System plug-ins directory
+        ePathTypeLLDBUserPlugins,         // User plug-ins directory
+        ePathTypeLLDBTempSystemDir,       // The LLDB temp directory for this system that will be cleaned up on exit
+        ePathTypeGlobalLLDBTempSystemDir, // The LLDB temp directory for this system, NOT cleaned up on a process exit.
+        ePathTypeClangDir                 // Find path to Clang builtin headers
     } PathType;
     
     //----------------------------------------------------------------------

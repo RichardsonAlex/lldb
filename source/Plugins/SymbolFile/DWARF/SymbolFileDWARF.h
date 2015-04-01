@@ -29,6 +29,7 @@
 #include "lldb/Core/ConstString.h"
 #include "lldb/Core/dwarf.h"
 #include "lldb/Core/Flags.h"
+#include "lldb/Core/RangeMap.h"
 #include "lldb/Core/UniqueCStringMap.h"
 #include "lldb/Symbol/ClangASTContext.h"
 #include "lldb/Symbol/SymbolFile.h"
@@ -150,22 +151,15 @@ public:
                                     clang::DeclarationName Name,
                                     llvm::SmallVectorImpl <clang::NamedDecl *> *results);
 
-    static bool 
-    LayoutRecordType (void *baton, 
-                      const clang::RecordDecl *record_decl,
-                      uint64_t &size, 
-                      uint64_t &alignment,
-                      llvm::DenseMap <const clang::FieldDecl *, uint64_t> &field_offsets,
-                      llvm::DenseMap <const clang::CXXRecordDecl *, clang::CharUnits> &base_offsets,
-                      llvm::DenseMap <const clang::CXXRecordDecl *, clang::CharUnits> &vbase_offsets);
+    static bool LayoutRecordType(void *baton, const clang::RecordDecl *record_decl, uint64_t &size, uint64_t &alignment,
+                                 llvm::DenseMap<const clang::FieldDecl *, uint64_t> &field_offsets,
+                                 llvm::DenseMap<const clang::CXXRecordDecl *, clang::CharUnits> &base_offsets,
+                                 llvm::DenseMap<const clang::CXXRecordDecl *, clang::CharUnits> &vbase_offsets);
 
-    bool 
-    LayoutRecordType (const clang::RecordDecl *record_decl,
-                      uint64_t &size, 
-                      uint64_t &alignment,
-                      llvm::DenseMap <const clang::FieldDecl *, uint64_t> &field_offsets,
-                      llvm::DenseMap <const clang::CXXRecordDecl *, clang::CharUnits> &base_offsets,
-                      llvm::DenseMap <const clang::CXXRecordDecl *, clang::CharUnits> &vbase_offsets);
+    bool LayoutRecordType(const clang::RecordDecl *record_decl, uint64_t &size, uint64_t &alignment,
+                          llvm::DenseMap<const clang::FieldDecl *, uint64_t> &field_offsets,
+                          llvm::DenseMap<const clang::CXXRecordDecl *, clang::CharUnits> &base_offsets,
+                          llvm::DenseMap<const clang::CXXRecordDecl *, clang::CharUnits> &vbase_offsets);
 
     struct LayoutInfo
     {
@@ -179,9 +173,9 @@ public:
         }
         uint64_t bit_size;
         uint64_t alignment;
-        llvm::DenseMap <const clang::FieldDecl *, uint64_t> field_offsets;
-        llvm::DenseMap <const clang::CXXRecordDecl *, clang::CharUnits> base_offsets;
-        llvm::DenseMap <const clang::CXXRecordDecl *, clang::CharUnits> vbase_offsets;
+        llvm::DenseMap<const clang::FieldDecl *, uint64_t> field_offsets;
+        llvm::DenseMap<const clang::CXXRecordDecl *, clang::CharUnits> base_offsets;
+        llvm::DenseMap<const clang::CXXRecordDecl *, clang::CharUnits> vbase_offsets;
     };
     //------------------------------------------------------------------
     // PluginInterface protocol
@@ -392,10 +386,12 @@ protected:
                             // Given a die_offset, figure out the symbol context representing that die.
     bool                    ResolveFunction (dw_offset_t offset,
                                              DWARFCompileUnit *&dwarf_cu,
+                                             bool include_inlines,
                                              lldb_private::SymbolContextList& sc_list);
                             
     bool                    ResolveFunction (DWARFCompileUnit *cu,
                                              const DWARFDebugInfoEntry *die,
+                                             bool include_inlines,
                                              lldb_private::SymbolContextList& sc_list);
 
     bool                    FunctionDieMatchesPartialName (
@@ -409,23 +405,21 @@ protected:
     void                    FindFunctions(
                                 const lldb_private::ConstString &name, 
                                 const NameToDIE &name_to_die,
+                                bool include_inlines,
                                 lldb_private::SymbolContextList& sc_list);
 
     void                    FindFunctions (
                                 const lldb_private::RegularExpression &regex, 
                                 const NameToDIE &name_to_die,
+                                bool include_inlines,
                                 lldb_private::SymbolContextList& sc_list);
 
     void                    FindFunctions (
                                 const lldb_private::RegularExpression &regex, 
                                 const DWARFMappedHash::MemoryTable &memory_table,
+                                bool include_inlines,
                                 lldb_private::SymbolContextList& sc_list);
 
-    lldb::TypeSP            FindDefinitionTypeForDIE (
-                                DWARFCompileUnit* dwarf_cu, 
-                                const DWARFDebugInfoEntry *die, 
-                                const lldb_private::ConstString &type_name);
-    
     lldb::TypeSP            FindDefinitionTypeForDWARFDeclContext (
                                 const DWARFDeclContext &die_decl_ctx);
 
@@ -442,6 +436,7 @@ protected:
     lldb_private::Symbol *  GetObjCClassSymbol (const lldb_private::ConstString &objc_class_name);
 
     void                    ParseFunctions (const DIEArray &die_offsets,
+                                            bool include_inlines,
                                             lldb_private::SymbolContextList& sc_list);
     lldb::TypeSP            GetTypeForDIE (DWARFCompileUnit *cu, 
                                            const DWARFDebugInfoEntry* die);
@@ -562,6 +557,11 @@ protected:
               uint32_t type_mask,
               TypeSet &type_set);
 
+    typedef lldb_private::RangeDataVector<lldb::addr_t, lldb::addr_t, lldb_private::Variable *> GlobalVariableMap;
+
+    GlobalVariableMap &
+    GetGlobalAranges();
+
     lldb::ModuleWP                        m_debug_map_module_wp;
     SymbolFileDWARFDebugMap *             m_debug_map_symfile;
     clang::TranslationUnitDecl *          m_clang_tu_decl;
@@ -589,6 +589,7 @@ protected:
     std::unique_ptr<DWARFMappedHash::MemoryTable> m_apple_types_ap;
     std::unique_ptr<DWARFMappedHash::MemoryTable> m_apple_namespaces_ap;
     std::unique_ptr<DWARFMappedHash::MemoryTable> m_apple_objc_ap;
+    std::unique_ptr<GlobalVariableMap>  m_global_aranges_ap;
     NameToDIE                           m_function_basename_index;  // All concrete functions
     NameToDIE                           m_function_fullname_index;  // All concrete functions
     NameToDIE                           m_function_method_index;    // All inlined functions

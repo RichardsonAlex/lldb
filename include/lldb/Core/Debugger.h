@@ -14,21 +14,16 @@
 
 #include <stdint.h>
 
-#include <stack>
-
 #include "lldb/lldb-public.h"
 #include "lldb/Core/Broadcaster.h"
-#include "lldb/Core/Communication.h"
+#include "lldb/Core/FormatEntity.h"
 #include "lldb/Core/IOHandler.h"
 #include "lldb/Core/Listener.h"
 #include "lldb/Core/SourceManager.h"
 #include "lldb/Core/UserID.h"
 #include "lldb/Core/UserSettingsController.h"
-#include "lldb/DataFormatters/FormatManager.h"
 #include "lldb/Host/HostThread.h"
 #include "lldb/Host/Terminal.h"
-#include "lldb/Interpreter/OptionValueProperties.h"
-#include "lldb/Target/ExecutionContext.h"
 #include "lldb/Target/Platform.h"
 #include "lldb/Target/TargetList.h"
 
@@ -60,10 +55,6 @@ friend class SourceManager;  // For GetSourceFileCache.
 
 public:
 
-    typedef llvm::sys::DynamicLibrary (*LoadPluginCallbackType) (const lldb::DebuggerSP &debugger_sp,
-                                                                 const FileSpec& spec,
-                                                                 Error& error);
-
     static lldb::DebuggerSP
     CreateInstance (lldb::LogOutputCallback log_callback = NULL, void *baton = NULL);
 
@@ -76,7 +67,7 @@ public:
     static void
     Initialize (LoadPluginCallbackType load_plugin_callback);
     
-    static void 
+    static int
     Terminate ();
     
     static void
@@ -158,8 +149,6 @@ public:
     // To get the target's source manager, call GetSourceManager on the target instead.
     SourceManager &
     GetSourceManager ();
-
-public:
     
     lldb::TargetSP
     GetSelectedTarget ()
@@ -224,6 +213,12 @@ public:
     ConstString
     GetTopIOHandlerControlSequence(char ch);
 
+    const char *
+    GetIOHandlerCommandPrefix();
+
+    const char *
+    GetIOHandlerHelpPrologue();
+
     bool
     HideTopIOHandler();
 
@@ -243,15 +238,7 @@ public:
     GetDebuggerAtIndex (size_t index);
 
     static bool
-    FormatPrompt (const char *format,
-                  const SymbolContext *sc,
-                  const ExecutionContext *exe_ctx,
-                  const Address *addr,
-                  Stream &s,
-                  ValueObject* valobj = NULL);
-
-    static bool
-    FormatDisassemblerAddress (const char *format,
+    FormatDisassemblerAddress (const FormatEntity::Entry *format,
                                const SymbolContext *sc,
                                const SymbolContext *prev_sc,
                                const ExecutionContext *exe_ctx,
@@ -296,13 +283,13 @@ public:
     bool
     GetAutoConfirm () const;
 
-    const char *
+    const FormatEntity::Entry *
     GetDisassemblyFormat() const;
 
-    const char *
+    const FormatEntity::Entry *
     GetFrameFormat() const;
 
-    const char *
+    const FormatEntity::Entry *
     GetThreadFormat() const;
     
     lldb::ScriptLanguage
@@ -352,7 +339,6 @@ public:
     
     bool
     GetNotifyVoid () const;
-
     
     const ConstString &
     GetInstanceName()
@@ -364,7 +350,7 @@ public:
     LoadPlugin (const FileSpec& spec, Error& error);
 
     void
-    ExecuteIOHanders();
+    ExecuteIOHandlers();
     
     bool
     IsForwardingEvents ();
@@ -380,6 +366,11 @@ public:
     {
         return m_event_handler_thread.IsJoinable();
     }
+
+    // This is for use in the command interpreter, when you either want the selected target, or if no target
+    // is present you want to prime the dummy target with entities that will be copied over to new targets.
+    Target *GetSelectedOrDummyTarget(bool prefer_dummy = false);
+    Target *GetDummyTarget();
 
 protected:
 
@@ -426,11 +417,16 @@ protected:
     {
         return m_source_file_cache;
     }
+
+    void
+    InstanceInitialize ();
+
     lldb::StreamFileSP m_input_file_sp;
     lldb::StreamFileSP m_output_file_sp;
     lldb::StreamFileSP m_error_file_sp;
     TerminalState m_terminal_state;
     TargetList m_target_list;
+
     PlatformList m_platform_list;
     Listener m_listener;
     std::unique_ptr<SourceManager> m_source_manager_ap;    // This is a scratch source manager that we return if we have no targets.
@@ -448,10 +444,17 @@ protected:
     LoadedPluginsList m_loaded_plugins;
     HostThread m_event_handler_thread;
     HostThread m_io_handler_thread;
+    Broadcaster m_sync_broadcaster;
     lldb::ListenerSP m_forward_listener_sp;
-    void
-    InstanceInitialize ();
-    
+
+    //----------------------------------------------------------------------
+    // Events for m_sync_broadcaster
+    //----------------------------------------------------------------------
+    enum
+    {
+        eBroadcastBitEventThreadIsListening   = (1 << 0),
+    };
+
 private:
 
     // Use Debugger::CreateInstance() to get a shared pointer to a new

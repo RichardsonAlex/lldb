@@ -212,10 +212,13 @@ public:
                  ClangASTType type2,
                  bool ignore_qualifiers = false);
     
-    ClangASTType
+    static ClangASTType
+    GetTypeForDecl (clang::NamedDecl *decl);
+    
+    static ClangASTType
     GetTypeForDecl (clang::TagDecl *decl);
     
-    ClangASTType
+    static ClangASTType
     GetTypeForDecl (clang::ObjCInterfaceDecl *objc_decl);
     
     template <typename RecordDeclType>
@@ -232,7 +235,7 @@ public:
                 clang::IdentifierInfo &myIdent = ast->Idents.get(type_name.GetCString());
                 clang::DeclarationName myName = ast->DeclarationNames.getIdentifier(&myIdent);
                 
-                clang::DeclContext::lookup_const_result result = ast->getTranslationUnitDecl()->lookup(myName);
+                clang::DeclContext::lookup_result result = ast->getTranslationUnitDecl()->lookup(myName);
                 
                 if (!result.empty())
                 {

@@ -16,8 +16,11 @@
 #include "lldb/Core/Module.h"
 #include "lldb/Symbol/ObjectFile.h"
 #include "lldb/Symbol/Symbol.h"
+#include "lldb/Symbol/SymbolContext.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/Target.h"
+
+#include "llvm/Support/Path.h"
 
 #include "DYLDRendezvous.h"
 
@@ -117,7 +120,7 @@ DYLDRendezvous::DYLDRendezvous(Process *process)
         Module *exe_mod = m_process->GetTarget().GetExecutableModulePointer();
         if (exe_mod)
         {
-            exe_mod->GetFileSpec().GetPath(m_exe_path, PATH_MAX);
+            exe_mod->GetPlatformFileSpec().GetPath(m_exe_path, PATH_MAX);
             if (log)
                 log->Printf ("DYLDRendezvous::%s exe module executable path set: '%s'", __FUNCTION__, m_exe_path);
         }
@@ -203,7 +206,12 @@ DYLDRendezvous::UpdateSOEntries()
     // state and take a snapshot of the currently loaded images.
     if (m_current.state == eAdd || m_current.state == eDelete)
     {
-        assert(m_previous.state == eConsistent || (m_previous.state == eAdd && m_current.state == eDelete));
+        // Some versions of the android dynamic linker might send two
+        // notifications with state == eAdd back to back. Ignore them
+        // until we get an eConsistent notification.
+        if (!(m_previous.state == eConsistent || (m_previous.state == eAdd && m_current.state == eDelete)))
+            return false;
+
         m_soentries.clear();
         m_added_soentries.clear();
         m_removed_soentries.clear();
@@ -238,9 +246,7 @@ DYLDRendezvous::UpdateSOEntriesForAddition()
             return false;
 
         // Only add shared libraries and not the executable.
-        // On Linux this is indicated by an empty path in the entry.
-        // On FreeBSD it is the name of the executable.
-        if (entry.path.empty() || ::strcmp(entry.path.c_str(), m_exe_path) == 0)
+        if (SOEntryIsMainExecutable(entry))
             continue;
 
         pos = std::find(m_soentries.begin(), m_soentries.end(), entry);
@@ -277,6 +283,31 @@ DYLDRendezvous::UpdateSOEntriesForDeletion()
 }
 
 bool
+DYLDRendezvous::SOEntryIsMainExecutable(const SOEntry &entry)
+{
+    // On Linux the executable is indicated by an empty path in the entry. On
+    // FreeBSD and on Android it is the full path to the executable.
+
+    auto triple = m_process->GetTarget().GetArchitecture().GetTriple();
+    auto os_type = triple.getOS();
+    auto env_type = triple.getEnvironment();
+
+    switch (os_type) {
+        case llvm::Triple::FreeBSD:
+            return ::strcmp(entry.path.c_str(), m_exe_path) == 0;
+        case llvm::Triple::Linux:
+            switch (env_type) {
+                case llvm::Triple::Android:
+                    return ::strcmp(entry.path.c_str(), m_exe_path) == 0;
+                default:
+                    return entry.path.empty();
+            }
+        default:
+            return false;
+    }
+}
+
+bool
 DYLDRendezvous::TakeSnapshot(SOEntryList &entry_list)
 {
     SOEntry entry;
@@ -290,9 +321,7 @@ DYLDRendezvous::TakeSnapshot(SOEntryList &entry_list)
             return false;
 
         // Only add shared libraries and not the executable.
-        // On Linux this is indicated by an empty path in the entry.
-        // On FreeBSD it is the name of the executable.
-        if (entry.path.empty() || ::strcmp(entry.path.c_str(), m_exe_path) == 0)
+        if (SOEntryIsMainExecutable(entry))
             continue;
 
         entry_list.push_back(entry);

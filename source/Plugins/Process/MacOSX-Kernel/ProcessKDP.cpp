@@ -30,6 +30,7 @@
 #include "lldb/Interpreter/CommandReturnObject.h"
 #include "lldb/Interpreter/OptionGroupString.h"
 #include "lldb/Interpreter/OptionGroupUInt64.h"
+#include "lldb/Interpreter/OptionValueProperties.h"
 #include "lldb/Symbol/ObjectFile.h"
 #include "lldb/Target/RegisterContext.h"
 #include "lldb/Target/Target.h"
@@ -274,7 +275,7 @@ ProcessKDP::DoConnectRemote (Stream *strm, const char *remote_url)
     if (conn_ap->IsConnected())
     {
         const Socket& socket = static_cast<const Socket&>(*conn_ap->GetReadObject());
-        const uint16_t reply_port = socket.GetPortNumber();
+        const uint16_t reply_port = socket.GetLocalPortNumber();
 
         if (reply_port != 0)
         {

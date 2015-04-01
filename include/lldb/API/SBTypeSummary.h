@@ -15,12 +15,14 @@
 #ifndef LLDB_DISABLE_PYTHON
 
 namespace lldb {
-    class SBTypeSummaryOptions
+    class LLDB_API SBTypeSummaryOptions
     {
     public:
         SBTypeSummaryOptions();
 
         SBTypeSummaryOptions (const lldb::SBTypeSummaryOptions &rhs);
+        
+        SBTypeSummaryOptions (const lldb_private::TypeSummaryOptions *lldb_object_ptr);
         
         ~SBTypeSummaryOptions ();
         
@@ -56,8 +58,6 @@ namespace lldb {
         
         const lldb_private::TypeSummaryOptions &
         ref() const;
-        
-        SBTypeSummaryOptions (const lldb_private::TypeSummaryOptions *lldb_object_ptr);
         
         void
         SetOptions (const lldb_private::TypeSummaryOptions *lldb_object_ptr);

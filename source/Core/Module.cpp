@@ -25,7 +25,7 @@
 #include "lldb/Host/Symbols.h"
 #include "lldb/Interpreter/CommandInterpreter.h"
 #include "lldb/Interpreter/ScriptInterpreter.h"
-#include "lldb/lldb-private-log.h"
+#include "lldb/Symbol/ClangASTContext.h"
 #include "lldb/Symbol/CompileUnit.h"
 #include "lldb/Symbol/ObjectFile.h"
 #include "lldb/Symbol/SymbolContext.h"
@@ -38,6 +38,9 @@
 #include "lldb/Symbol/SymbolFile.h"
 
 #include "Plugins/ObjectFile/JIT/ObjectFileJIT.h"
+
+#include "llvm/Support/raw_os_ostream.h"
+#include "llvm/Support/Signals.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -145,14 +148,13 @@ Module::Module (const ModuleSpec &module_spec) :
     m_object_mod_time (),
     m_objfile_sp (),
     m_symfile_ap (),
-    m_ast (),
+    m_ast (new ClangASTContext),
     m_source_mappings (),
     m_sections_ap(),
     m_did_load_objfile (false),
     m_did_load_symbol_vendor (false),
     m_did_parse_uuid (false),
     m_did_init_ast (false),
-    m_is_dynamic_loader_module (false),
     m_file_has_changed (false),
     m_first_file_changed_log (false)
 {
@@ -250,14 +252,13 @@ Module::Module(const FileSpec& file_spec,
     m_object_mod_time (),
     m_objfile_sp (),
     m_symfile_ap (),
-    m_ast (),
+    m_ast (new ClangASTContext),
     m_source_mappings (),
     m_sections_ap(),
     m_did_load_objfile (false),
     m_did_load_symbol_vendor (false),
     m_did_parse_uuid (false),
     m_did_init_ast (false),
-    m_is_dynamic_loader_module (false),
     m_file_has_changed (false),
     m_first_file_changed_log (false)
 {
@@ -297,14 +298,13 @@ Module::Module () :
     m_object_mod_time (),
     m_objfile_sp (),
     m_symfile_ap (),
-    m_ast (),
+    m_ast (new ClangASTContext),
     m_source_mappings (),
     m_sections_ap(),
     m_did_load_objfile (false),
     m_did_load_symbol_vendor (false),
     m_did_parse_uuid (false),
     m_did_init_ast (false),
-    m_is_dynamic_loader_module (false),
     m_file_has_changed (false),
     m_first_file_changed_log (false)
 {
@@ -443,10 +443,10 @@ Module::GetClangASTContext ()
                     object_arch.GetTriple().setOS(llvm::Triple::MacOSX);
                 }
             }
-            m_ast.SetArchitecture (object_arch);
+            m_ast->SetArchitecture (object_arch);
         }
     }
-    return m_ast;
+    return *m_ast;
 }
 
 void
@@ -1236,7 +1236,12 @@ Module::LogMessageVerboseBacktrace (Log *log, const char *format, ...)
         log_message.PrintfVarArg (format, args);
         va_end (args);
         if (log->GetVerbose())
-            Host::Backtrace (log_message, 1024);
+        {
+            std::string back_trace;
+            llvm::raw_string_ostream stream(back_trace);
+            llvm::sys::PrintStackTrace(stream);
+            log_message.PutCString(back_trace.c_str());
+        }
         log->PutCString(log_message.GetString().c_str());
     }
 }
@@ -1304,10 +1309,14 @@ Module::GetObjectFile()
                                                    data_offset);
             if (m_objfile_sp)
             {
-                // Once we get the object file, update our module with the object file's 
+                // Once we get the object file, update our module with the object file's
                 // architecture since it might differ in vendor/os if some parts were
-                // unknown.
-                m_objfile_sp->GetArchitecture (m_arch);
+                // unknown.  But since the matching arch might already be more specific
+                // than the generic COFF architecture, only merge in those values that
+                // overwrite unspecified unknown values.
+                ArchSpec new_arch;
+                m_objfile_sp->GetArchitecture(new_arch);
+                m_arch.MergeFrom(new_arch);
             }
             else
             {
@@ -1607,7 +1616,7 @@ Module::SetArchitecture (const ArchSpec &new_arch)
         m_arch = new_arch;
         return true;
     }    
-    return m_arch.IsExactMatch(new_arch);
+    return m_arch.IsCompatibleMatch(new_arch);
 }
 
 bool 
@@ -1732,7 +1741,7 @@ Module::PrepareForFunctionNameLookup (const ConstString &name,
                 if (CPPLanguageRuntime::ExtractContextAndIdentifier (name_cstr, context, basename))
                     lookup_name_type_mask |= (eFunctionNameTypeMethod | eFunctionNameTypeBase);
                 else
-                    lookup_name_type_mask = eFunctionNameTypeFull;
+                    lookup_name_type_mask |= eFunctionNameTypeFull;
             }
             else
             {
@@ -1821,3 +1830,13 @@ Module::CreateJITModule (const lldb::ObjectFileJITDelegateSP &delegate_sp)
     return ModuleSP();
 }
 
+bool
+Module::GetIsDynamicLinkEditor()
+{
+    ObjectFile * obj_file = GetObjectFile ();
+
+    if (obj_file)
+        return obj_file->GetIsDynamicLinkEditor();
+
+    return false;
+}

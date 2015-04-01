@@ -1,10 +1,12 @@
 set( LLDB_USED_LIBS
+  lldbBase
   lldbBreakpoint
   lldbCommands
   lldbDataFormatters
   lldbHost
   lldbCore
   lldbExpression
+  lldbInitialization
   lldbInterpreter
   lldbSymbol
   lldbTarget
@@ -18,22 +20,20 @@ set( LLDB_USED_LIBS
   lldbPluginDynamicLoaderPosixDYLD
   lldbPluginDynamicLoaderHexagonDYLD
 
-  lldbPluginObjectFileMachO
   lldbPluginObjectFileELF
   lldbPluginObjectFileJIT
   lldbPluginSymbolVendorELF
   lldbPluginObjectContainerBSDArchive
   lldbPluginObjectContainerMachOArchive
   lldbPluginProcessGDBRemote
-  lldbPluginProcessMachCore
   lldbPluginProcessUtility
+  lldbPluginPlatformAndroid
   lldbPluginPlatformGDB
   lldbPluginPlatformFreeBSD
   lldbPluginPlatformKalimba
   lldbPluginPlatformLinux
   lldbPluginPlatformPOSIX
   lldbPluginPlatformWindows
-  lldbPluginObjectFileMachO
   lldbPluginObjectContainerMachOArchive
   lldbPluginObjectContainerBSDArchive
   lldbPluginPlatformMacOSX
@@ -51,19 +51,15 @@ set( LLDB_USED_LIBS
   lldbPluginABISysV_ppc64
   lldbPluginInstructionARM
   lldbPluginInstructionARM64
+  lldbPluginInstructionMIPS64
   lldbPluginObjectFilePECOFF
   lldbPluginOSPython
   lldbPluginMemoryHistoryASan
   lldbPluginInstrumentationRuntimeAddressSanitizer
+  lldbPluginSystemRuntimeMacOSX
+  lldbPluginProcessElfCore
+  lldbPluginJITLoaderGDB
   )
-
-# Need to export the API in the liblldb.dll for Windows
-# The lldbAPI source files are added directly in liblldb
-if (NOT CMAKE_SYSTEM_NAME MATCHES "Windows" )
-  list(APPEND LLDB_USED_LIBS
-    lldbAPI
-    )
-endif ()
 
 # Windows-only libraries
 if ( CMAKE_SYSTEM_NAME MATCHES "Windows" )
@@ -72,6 +68,7 @@ if ( CMAKE_SYSTEM_NAME MATCHES "Windows" )
     lldbPluginProcessElfCore
     lldbPluginJITLoaderGDB
     Ws2_32
+    Rpcrt4
     )
 endif ()
 
@@ -106,11 +103,10 @@ if ( CMAKE_SYSTEM_NAME MATCHES "Darwin" )
   set_source_files_properties(${LLDB_VERS_GENERATED_FILE} PROPERTIES GENERATED 1)
   list(APPEND LLDB_USED_LIBS
     lldbPluginDynamicLoaderDarwinKernel
+    lldbPluginObjectFileMachO
+    lldbPluginProcessMachCore
     lldbPluginProcessMacOSXKernel
     lldbPluginSymbolVendorMacOSX
-    lldbPluginSystemRuntimeMacOSX
-    lldbPluginProcessElfCore
-    lldbPluginJITLoaderGDB
     )
 endif()
 
@@ -132,18 +128,27 @@ set( CLANG_USED_LIBS
 
 set(LLDB_SYSTEM_LIBS)
 if (NOT CMAKE_SYSTEM_NAME MATCHES "Windows" AND NOT __ANDROID_NDK__)
-  list(APPEND LLDB_SYSTEM_LIBS edit panel ncurses)
+  if (NOT LLDB_DISABLE_LIBEDIT)
+    list(APPEND LLDB_SYSTEM_LIBS edit)
+  endif()
+  if (NOT LLDB_DISABLE_CURSES)
+    list(APPEND LLDB_SYSTEM_LIBS panel ncurses)
+  endif()
 endif()
 # On FreeBSD backtrace() is provided by libexecinfo, not libc.
 if (CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
   list(APPEND LLDB_SYSTEM_LIBS execinfo)
 endif()
 
-if (NOT LLDB_DISABLE_PYTHON)
+if (NOT LLDB_DISABLE_PYTHON AND NOT LLVM_BUILD_STATIC)
   list(APPEND LLDB_SYSTEM_LIBS ${PYTHON_LIBRARIES})
 endif()
 
 list(APPEND LLDB_SYSTEM_LIBS ${system_libs})
+
+if (LLVM_BUILD_STATIC)
+  list(APPEND LLDB_SYSTEM_LIBS python2.7 z util termcap gpm ssl crypto bsd)
+endif()
 
 set( LLVM_LINK_COMPONENTS
   ${LLVM_TARGETS_TO_BUILD}
@@ -161,6 +166,7 @@ set( LLVM_LINK_COMPONENTS
   mcdisassembler
   executionengine
   option
+  support
   )
 
 if ( NOT LLDB_DISABLE_PYTHON )
