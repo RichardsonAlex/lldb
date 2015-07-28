@@ -47,6 +47,7 @@ public:
         eMIPSSubType_mips64el,
         eMIPSSubType_mips64r2el,
         eMIPSSubType_mips64r6el,
+        eMIPSSubType_cheri,
     };
     
     enum Core

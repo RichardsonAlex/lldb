@@ -86,6 +86,9 @@ g_register_infos_mips64[] =
     DEFINE_GPR(cause,    NULL,  gcc_dwarf_cause_mips64, gcc_dwarf_cause_mips64, LLDB_INVALID_REGNUM,    LLDB_INVALID_REGNUM),
     DEFINE_GPR(ic,       NULL,  gcc_dwarf_ic_mips64,    gcc_dwarf_ic_mips64,    LLDB_INVALID_REGNUM,    LLDB_INVALID_REGNUM),
     DEFINE_GPR(dummy,    NULL,  gcc_dwarf_dummy_mips64, gcc_dwarf_dummy_mips64, LLDB_INVALID_REGNUM,    LLDB_INVALID_REGNUM),
+#if 0
+    DEFINE_SYN64(pc,     NULL,  LLDB_INVALID_REGNUM,    LLDB_INVALID_REGNUM,    LLDB_REGNUM_GENERIC_PC, LLDB_INVALID_REGNUM), // Synthetic PC
+#endif
 
     DEFINE_FPR (fp_reg[0],   f0,    NULL,   gcc_dwarf_f0_mips64,   gcc_dwarf_f0_mips64,   LLDB_INVALID_REGNUM,    gdb_f0_mips64),
     DEFINE_FPR (fp_reg[1],   f1,    NULL,   gcc_dwarf_f1_mips64,   gcc_dwarf_f1_mips64,   LLDB_INVALID_REGNUM,    gdb_f1_mips64),
@@ -117,8 +120,10 @@ g_register_infos_mips64[] =
     DEFINE_FPR (fp_reg[27],  f27,   NULL,   gcc_dwarf_f27_mips64,  gcc_dwarf_f27_mips64,  LLDB_INVALID_REGNUM,    gdb_f27_mips64),
     DEFINE_FPR (fp_reg[28],  f28,   NULL,   gcc_dwarf_f28_mips64,  gcc_dwarf_f28_mips64,  LLDB_INVALID_REGNUM,    gdb_f28_mips64),
     DEFINE_FPR (fp_reg[29],  f29,   NULL,   gcc_dwarf_f29_mips64,  gcc_dwarf_f29_mips64,  LLDB_INVALID_REGNUM,    gdb_f29_mips64),
-
-    DEFINE_SYN64(pc,     NULL,  LLDB_INVALID_REGNUM,    LLDB_INVALID_REGNUM,    LLDB_REGNUM_GENERIC_PC, LLDB_INVALID_REGNUM), // Synthetic PC
+    DEFINE_FPR (fp_reg[30],  f30,   NULL,   gcc_dwarf_f30_mips64,  gcc_dwarf_f30_mips64,  LLDB_INVALID_REGNUM,    gdb_f30_mips64),
+    DEFINE_FPR (fp_reg[31],  f31,   NULL,   gcc_dwarf_f31_mips64,  gcc_dwarf_f31_mips64,  LLDB_INVALID_REGNUM,    gdb_f31_mips64),
+    DEFINE_FPR (fcsr,        fcsr,  NULL,   gcc_dwarf_fcsr_mips64, gcc_dwarf_fcsr_mips64, LLDB_INVALID_REGNUM,    gdb_fcsr_mips64),
+    DEFINE_FPR (fir,         fir,   NULL,   gcc_dwarf_fir_mips64,  gcc_dwarf_fir_mips64,  LLDB_INVALID_REGNUM,    gdb_fir_mips64),
 
     // Capability registers.
     DEFINE_CR( c0,  0, NULL),
@@ -149,10 +154,6 @@ g_register_infos_mips64[] =
     DEFINE_CR(c25, 25, NULL),
     DEFINE_CR(c26, 26, "idc"),
     DEFINE_CR(pcc, 27, NULL),
-    DEFINE_FPR (fp_reg[30],  f30,   NULL,   gcc_dwarf_f30_mips64,  gcc_dwarf_f30_mips64,  LLDB_INVALID_REGNUM,    gdb_f30_mips64),
-    DEFINE_FPR (fp_reg[31],  f31,   NULL,   gcc_dwarf_f31_mips64,  gcc_dwarf_f31_mips64,  LLDB_INVALID_REGNUM,    gdb_f31_mips64),
-    DEFINE_FPR (fcsr,        fcsr,  NULL,   gcc_dwarf_fcsr_mips64, gcc_dwarf_fcsr_mips64, LLDB_INVALID_REGNUM,    gdb_fcsr_mips64),
-    DEFINE_FPR (fir,         fir,   NULL,   gcc_dwarf_fir_mips64,  gcc_dwarf_fir_mips64,  LLDB_INVALID_REGNUM,    gdb_fir_mips64)
 };
 static_assert((sizeof(g_register_infos_mips64) / sizeof(g_register_infos_mips64[0])) == k_num_registers_mips64,
     "g_register_infos_mips64 has wrong number of register infos");
