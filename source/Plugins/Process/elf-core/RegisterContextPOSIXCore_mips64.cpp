@@ -85,7 +85,6 @@ RegisterContextCorePOSIX_mips64::ReadRegister(const RegisterInfo *reg_info, Regi
 {
     const uint32_t reg = reg_info->kinds[lldb::eRegisterKindLLDB];
     lldb::offset_t offset = reg_info->byte_offset;
-#if 0
     if (reg == syn_pc_mips64)
     {
         // Synthetic PC is the sum of:
@@ -114,9 +113,7 @@ RegisterContextCorePOSIX_mips64::ReadRegister(const RegisterInfo *reg_info, Regi
         value = v;
         return true;
     }
-    else
-#endif
-    if (reg <= gpr_dummy_mips64)
+    else if (reg <= gpr_dummy_mips64)
     {
         uint64_t v = m_gpr.GetMaxU64(&offset, reg_info->byte_size);
         if (offset == reg_info->byte_offset + reg_info->byte_size)

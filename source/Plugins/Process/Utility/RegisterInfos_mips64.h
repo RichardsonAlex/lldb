@@ -86,9 +86,7 @@ g_register_infos_mips64[] =
     DEFINE_GPR(cause,    NULL,  gcc_dwarf_cause_mips64, gcc_dwarf_cause_mips64, LLDB_INVALID_REGNUM,    LLDB_INVALID_REGNUM),
     DEFINE_GPR(ic,       NULL,  gcc_dwarf_ic_mips64,    gcc_dwarf_ic_mips64,    LLDB_INVALID_REGNUM,    LLDB_INVALID_REGNUM),
     DEFINE_GPR(dummy,    NULL,  gcc_dwarf_dummy_mips64, gcc_dwarf_dummy_mips64, LLDB_INVALID_REGNUM,    LLDB_INVALID_REGNUM),
-#if 0
     DEFINE_SYN64(pc,     NULL,  LLDB_INVALID_REGNUM,    LLDB_INVALID_REGNUM,    LLDB_REGNUM_GENERIC_PC, LLDB_INVALID_REGNUM), // Synthetic PC
-#endif
 
     DEFINE_FPR (fp_reg[0],   f0,    NULL,   gcc_dwarf_f0_mips64,   gcc_dwarf_f0_mips64,   LLDB_INVALID_REGNUM,    gdb_f0_mips64),
     DEFINE_FPR (fp_reg[1],   f1,    NULL,   gcc_dwarf_f1_mips64,   gcc_dwarf_f1_mips64,   LLDB_INVALID_REGNUM,    gdb_f1_mips64),

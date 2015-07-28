@@ -150,11 +150,9 @@ namespace lldb_private
         gpr_cause_mips64,
         gpr_ic_mips64,
         gpr_dummy_mips64,
-#if 0
-        syn_pc_mips64,
-#endif
 
-        k_last_gpr_mips64 = gpr_dummy_mips64,
+        syn_pc_mips64,
+        k_last_gpr_mips64 = syn_pc_mips64,
 
         k_first_fpr_mips64,
         fpr_f0_mips64 = k_first_fpr_mips64,
