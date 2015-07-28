@@ -30,6 +30,31 @@
 using namespace clang;
 using namespace lldb_private;
 
+//------------------------------------------------------------------
+// Scoped class that will remove an active lexical decl from the set
+// when it goes out of scope.
+//------------------------------------------------------------------
+namespace {
+    class ScopedLexicalDeclEraser
+    {
+    public:
+        ScopedLexicalDeclEraser(std::set<const clang::Decl *> &decls,
+                                const clang::Decl *decl)
+            : m_active_lexical_decls(decls), m_decl(decl)
+        {
+        }
+
+        ~ScopedLexicalDeclEraser()
+        {
+            m_active_lexical_decls.erase(m_decl);
+        }
+
+    private:
+        std::set<const clang::Decl *> &m_active_lexical_decls;
+        const clang::Decl *m_decl;
+    };
+}
+
 ClangASTSource::~ClangASTSource()
 {
     m_ast_importer->ForgetDestination(m_ast_context);
@@ -190,6 +215,12 @@ ClangASTSource::CompleteType (TagDecl *tag_decl)
         ASTDumper dumper((Decl*)tag_decl);
         dumper.ToLog(log, "      [CTD] ");
     }
+
+    auto iter = m_active_lexical_decls.find(tag_decl);
+    if (iter != m_active_lexical_decls.end())
+        return;
+    m_active_lexical_decls.insert(tag_decl);
+    ScopedLexicalDeclEraser eraser(m_active_lexical_decls, tag_decl);
 
     if (!m_ast_importer->CompleteTagDecl (tag_decl))
     {
@@ -401,6 +432,12 @@ ClangASTSource::FindExternalLexicalDecls (const DeclContext *decl_context,
 
     if (!context_decl)
         return ELR_Failure;
+
+    auto iter = m_active_lexical_decls.find(context_decl);
+    if (iter != m_active_lexical_decls.end())
+        return ELR_Failure;
+    m_active_lexical_decls.insert(context_decl);
+    ScopedLexicalDeclEraser eraser(m_active_lexical_decls, context_decl);
 
     static unsigned int invocation_id = 0;
     unsigned int current_id = invocation_id++;
@@ -1889,7 +1926,7 @@ NameSearchContext::AddVarDecl(const ClangASTType &type)
 }
 
 clang::NamedDecl *
-NameSearchContext::AddFunDecl (const ClangASTType &type)
+NameSearchContext::AddFunDecl (const ClangASTType &type, bool extern_c)
 {
     assert (type && "Type for variable must be valid!");
 
@@ -1908,15 +1945,26 @@ NameSearchContext::AddFunDecl (const ClangASTType &type)
     const bool isInlineSpecified = false;
     const bool hasWrittenPrototype = true;
     const bool isConstexprSpecified = false;
+    
+    clang::DeclContext *context = const_cast<DeclContext*>(m_decl_context);
+    
+    if (extern_c) {
+        context = LinkageSpecDecl::Create(*ast,
+                                          context,
+                                          SourceLocation(),
+                                          SourceLocation(),
+                                          clang::LinkageSpecDecl::LanguageIDs::lang_c,
+                                          false);
+    }
 
     clang::FunctionDecl *func_decl = FunctionDecl::Create (*ast,
-                                                           const_cast<DeclContext*>(m_decl_context),
+                                                           context,
                                                            SourceLocation(),
                                                            SourceLocation(),
                                                            m_decl_name.getAsIdentifierInfo(),
                                                            qual_type,
                                                            NULL,
-                                                           SC_Static,
+                                                           SC_Extern,
                                                            isInlineSpecified,
                                                            hasWrittenPrototype,
                                                            isConstexprSpecified);
@@ -1939,7 +1987,7 @@ NameSearchContext::AddFunDecl (const ClangASTType &type)
             QualType arg_qual_type (func_proto_type->getParamType(ArgIndex));
 
             parm_var_decls.push_back(ParmVarDecl::Create (*ast,
-                                                          const_cast<DeclContext*>(m_decl_context),
+                                                          const_cast<DeclContext*>(context),
                                                           SourceLocation(),
                                                           SourceLocation(),
                                                           NULL,
@@ -1975,7 +2023,7 @@ NameSearchContext::AddGenericFunDecl()
                                                                                 ArrayRef<QualType>(),                                        // argument types
                                                                                 proto_info));
 
-    return AddFunDecl(ClangASTType (m_ast_source.m_ast_context, generic_function_type));
+    return AddFunDecl(ClangASTType (m_ast_source.m_ast_context, generic_function_type), true);
 }
 
 clang::NamedDecl *

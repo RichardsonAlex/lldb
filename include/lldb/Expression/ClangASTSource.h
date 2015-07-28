@@ -51,6 +51,7 @@ public:
         m_lookups_enabled (false),
         m_target (target),
         m_ast_context (NULL),
+        m_active_lexical_decls (),
         m_active_lookups ()
     {
         m_ast_importer = m_target->GetClangASTImporter();
@@ -404,6 +405,7 @@ protected:
     const lldb::TargetSP                m_target;           ///< The target to use in finding variables and types.
     clang::ASTContext                  *m_ast_context;      ///< The AST context requests are coming in for.
     ClangASTImporter                   *m_ast_importer;     ///< The target's AST importer.
+    std::set<const clang::Decl *>       m_active_lexical_decls;
     std::set<const char *>              m_active_lookups;
 };
 
@@ -474,8 +476,12 @@ struct NameSearchContext {
     ///
     /// @param[in] type
     ///     The opaque QualType for the FunDecl being registered.
+    ///
+    /// @param[in] extern_c
+    ///     If true, build an extern "C" linkage specification for this.
     //------------------------------------------------------------------
-    clang::NamedDecl *AddFunDecl(const ClangASTType &type);
+    clang::NamedDecl *AddFunDecl(const ClangASTType &type,
+                                 bool extern_c = false);
     
     //------------------------------------------------------------------
     /// Create a FunDecl with the name being searched for and generic

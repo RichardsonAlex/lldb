@@ -7,8 +7,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "lldb/lldb-python.h"
-
 #include "lldb/Core/ValueObject.h"
 
 // C Includes
@@ -43,7 +41,6 @@
 #include "lldb/Host/Endian.h"
 
 #include "lldb/Interpreter/CommandInterpreter.h"
-#include "lldb/Interpreter/ScriptInterpreterPython.h"
 
 #include "lldb/Symbol/ClangASTType.h"
 #include "lldb/Symbol/ClangASTContext.h"
@@ -198,7 +195,7 @@ ValueObject::UpdateValueIfNeeded (bool update_format)
 
     bool first_update = IsChecksumEmpty();
     
-    if (m_update_point.NeedsUpdating())
+    if (NeedsUpdating())
     {
         m_update_point.SetUpdated();
         
@@ -1053,6 +1050,9 @@ ValueObject::GetPointeeData (DataExtractor& data,
                     if (max_bytes > offset)
                     {
                         size_t bytes_read = std::min<uint64_t>(max_bytes - offset, bytes);
+                        addr = m_value.GetScalar().ULongLong(LLDB_INVALID_ADDRESS);
+                        if (addr == LLDB_INVALID_ADDRESS)
+                            break;
                         heap_buf_ptr->CopyData((uint8_t*)(addr + offset), bytes_read);
                         data.SetData(data_sp);
                         return bytes_read;
@@ -1822,11 +1822,17 @@ ValueObject::GetAddressOf (bool scalar_is_load_address, AddressType *address_typ
 
     case Value::eValueTypeLoadAddress: 
     case Value::eValueTypeFileAddress:
-    case Value::eValueTypeHostAddress:
         {
             if(address_type)
                 *address_type = m_value.GetValueAddressType ();
             return m_value.GetScalar().ULongLong(LLDB_INVALID_ADDRESS);
+        }
+        break;
+    case Value::eValueTypeHostAddress:
+        {
+            if(address_type)
+                *address_type = m_value.GetValueAddressType ();
+            return LLDB_INVALID_ADDRESS;
         }
         break;
     }
@@ -3555,7 +3561,7 @@ void
 ValueObject::LogValueObject (Log *log)
 {
     if (log)
-        return LogValueObject (log, DumpValueObjectOptions::DefaultOptions());
+        return LogValueObject (log, DumpValueObjectOptions(*this));
 }
 
 void
@@ -3573,7 +3579,7 @@ ValueObject::LogValueObject (Log *log, const DumpValueObjectOptions& options)
 void
 ValueObject::Dump (Stream &s)
 {
-    Dump (s, DumpValueObjectOptions::DefaultOptions());
+    Dump (s, DumpValueObjectOptions(*this));
 }
 
 void
@@ -3786,7 +3792,7 @@ ValueObject::AddressOf (Error &error)
     const bool scalar_is_load_address = false;
     addr_t addr = GetAddressOf (scalar_is_load_address, &address_type);
     error.Clear();
-    if (addr != LLDB_INVALID_ADDRESS)
+    if (addr != LLDB_INVALID_ADDRESS && address_type != eAddressTypeHost)
     {
         switch (address_type)
         {
@@ -3800,7 +3806,6 @@ ValueObject::AddressOf (Error &error)
 
         case eAddressTypeFile:
         case eAddressTypeLoad:
-        case eAddressTypeHost:
             {
                 ClangASTType clang_type = GetClangType();
                 if (clang_type)
@@ -3816,6 +3821,8 @@ ValueObject::AddressOf (Error &error)
                                                                           m_data.GetAddressByteSize());
                 }
             }
+            break;
+        default:
             break;
         }
     }
@@ -3943,9 +3950,8 @@ ValueObject::EvaluationPoint::~EvaluationPoint ()
 // exe_scope will be set to the current execution context scope.
 
 bool
-ValueObject::EvaluationPoint::SyncWithProcessState()
+ValueObject::EvaluationPoint::SyncWithProcessState(bool accept_invalid_exe_ctx)
 {
-
     // Start with the target, if it is NULL, then we're obviously not going to get any further:
     const bool thread_and_frame_only_if_stopped = true;
     ExecutionContext exe_ctx(m_exe_ctx_ref.Lock(thread_and_frame_only_if_stopped));
@@ -3988,30 +3994,33 @@ ValueObject::EvaluationPoint::SyncWithProcessState()
     // That way we'll be sure to return a valid exe_scope.
     // If we used to have a thread or a frame but can't find it anymore, then mark ourselves as invalid.
     
-    if (m_exe_ctx_ref.HasThreadRef())
+    if (!accept_invalid_exe_ctx)
     {
-        ThreadSP thread_sp (m_exe_ctx_ref.GetThreadSP());
-        if (thread_sp)
+        if (m_exe_ctx_ref.HasThreadRef())
         {
-            if (m_exe_ctx_ref.HasFrameRef())
+            ThreadSP thread_sp (m_exe_ctx_ref.GetThreadSP());
+            if (thread_sp)
             {
-                StackFrameSP frame_sp (m_exe_ctx_ref.GetFrameSP());
-                if (!frame_sp)
+                if (m_exe_ctx_ref.HasFrameRef())
                 {
-                    // We used to have a frame, but now it is gone
-                    SetInvalid();
-                    changed = was_valid;
+                    StackFrameSP frame_sp (m_exe_ctx_ref.GetFrameSP());
+                    if (!frame_sp)
+                    {
+                        // We used to have a frame, but now it is gone
+                        SetInvalid();
+                        changed = was_valid;
+                    }
                 }
             }
+            else
+            {
+                // We used to have a thread, but now it is gone
+                SetInvalid();
+                changed = was_valid;
+            }
         }
-        else
-        {
-            // We used to have a thread, but now it is gone
-            SetInvalid();
-            changed = was_valid;
-        }
-
     }
+
     return changed;
 }
 

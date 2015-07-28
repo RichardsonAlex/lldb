@@ -427,6 +427,7 @@ CMIDriverMgr::DriverGetTheDebugger(void)
 //              --versionLong
 //              --log
 //              --executable
+//              --log-dir
 //          The above arguments are not handled by any driver object except for --executable.
 //          The options --interpreter and --executable in code act very similar. The
 //          --executable is necessary to differentiate whither the MI Driver is being using
@@ -435,8 +436,9 @@ CMIDriverMgr::DriverGetTheDebugger(void)
 //          executable if called from the command line. Using --executable tells the MI
 //          Driver is being called the command line and that the executable argument is indeed
 //          a specified executable an so actions commands to set up the executable for a
-//          debug session. Using --interpreter on the commnd line does not action additional
-//          commands to initialise a debug session and so be able to launch the process.
+//          debug session. Using --interpreter on the command line does not action additional
+//          commands to initialise a debug session and so be able to launch the process. The directory
+//          where the log file is created is specified using --log-dir.
 // Type:    Method.
 // Args:    argc        - (R)   An integer that contains the count of arguments that follow in
 //                              argv. The argc parameter is always greater than or equal to 1.
@@ -483,7 +485,9 @@ CMIDriverMgr::ParseArgs(const int argc, const char *argv[], bool &vwbExiting)
     bool bHaveArgVersion = false;
     bool bHaveArgVersionLong = false;
     bool bHaveArgLog = false;
+    bool bHaveArgLogDir = false;
     bool bHaveArgHelp = false;
+    CMIUtilString strLogDir;
 
     bHaveArgInterpret = true;
     if (bHaveArgs)
@@ -512,6 +516,11 @@ CMIDriverMgr::ParseArgs(const int argc, const char *argv[], bool &vwbExiting)
             {
                 bHaveArgLog = true;
             }
+            if (0 == strArg.compare(0,10,"--log-dir="))
+            {
+                strLogDir = strArg.substr(10,CMIUtilString::npos);
+                bHaveArgLogDir = true;
+            }
             if ((0 == strArg.compare("--help")) || (0 == strArg.compare("-h")))
             {
                 bHaveArgHelp = true;
@@ -524,7 +533,12 @@ CMIDriverMgr::ParseArgs(const int argc, const char *argv[], bool &vwbExiting)
         CMICmnLog::Instance().SetEnabled(true);
     }
 
-    // Todo: Remove this output when MI is finished. It is temporary to persuade Ecllipse plugin to work.
+    if (bHaveArgLogDir)
+    {
+        bOk = bOk && CMICmnLogMediumFile::Instance().SetDirectory(strLogDir);
+    }
+
+    // Todo: Remove this output when MI is finished. It is temporary to persuade Eclipse plugin to work.
     //       Eclipse reads this literally and will not work unless it gets this exact version text.
     // Handle --version option (ignore the --interpreter option if present)
     if (bHaveArgVersion)
@@ -534,7 +548,7 @@ CMIDriverMgr::ParseArgs(const int argc, const char *argv[], bool &vwbExiting)
         return bOk;
     }
 
-    // Todo: Make this the --version when the the above --version version is removed
+    // Todo: Make this the --version when the above --version version is removed
     // Handle --versionlong option (ignore the --interpreter option if present)
     if (bHaveArgVersionLong)
     {
@@ -543,7 +557,7 @@ CMIDriverMgr::ParseArgs(const int argc, const char *argv[], bool &vwbExiting)
         return bOk;
     }
 
-    // Both '--help' and '--intepreter' means give help for MI only. Without
+    // Both '--help' and '--interpreter' means give help for MI only. Without
     // '--interpreter' help the LLDB driver is working and so help is for that.
     if (bHaveArgHelp && bHaveArgInterpret)
     {
@@ -553,7 +567,7 @@ CMIDriverMgr::ParseArgs(const int argc, const char *argv[], bool &vwbExiting)
     }
 
     // This makes the assumption that there is at least one MI compatible
-    // driver registered and one LLDB driver registerd and the CMIDriver
+    // driver registered and one LLDB driver registered and the CMIDriver
     // is the first one found.
     // ToDo: Implement a better solution that handle any order, any number
     // of drivers. Or this 'feature' may be removed if deemed not required.
@@ -612,8 +626,10 @@ CMIDriverMgr::GetHelpOnCmdLineArgOptions(void) const
         MIRSRC(IDE_MI_APP_ARG_VERSION),
         MIRSRC(IDE_MI_APP_ARG_VERSION_LONG),
         MIRSRC(IDE_MI_APP_ARG_INTERPRETER),
+        MIRSRC(IDE_MI_APP_ARG_SOURCE),
         MIRSRC(IDE_MI_APP_ARG_EXECUTEABLE),
         CMIUtilString::Format(MIRSRC(IDE_MI_APP_ARG_APP_LOG), CMICmnLogMediumFile::Instance().GetFileName().c_str()),
+        MIRSRC(IDE_MI_APP_ARG_APP_LOG_DIR),
         MIRSRC(IDE_MI_APP_ARG_EXECUTABLE),
         MIRSRC(IDS_CMD_QUIT_HELP),
         MIRSRC(IDE_MI_APP_ARG_EXAMPLE)};

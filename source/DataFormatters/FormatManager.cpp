@@ -7,8 +7,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "lldb/lldb-python.h"
-
 #include "lldb/DataFormatters/FormatManager.h"
 
 // C Includes
@@ -18,7 +16,6 @@
 
 #include "lldb/Core/Debugger.h"
 #include "lldb/DataFormatters/CXXFormatterFunctions.h"
-#include "lldb/Interpreter/ScriptInterpreterPython.h"
 #include "lldb/Target/ExecutionContext.h"
 #include "lldb/Target/Platform.h"
 #include "llvm/ADT/STLExtras.h"
@@ -666,7 +663,8 @@ FormatManager::GetFormat (ValueObject& valobj,
             log->Printf("[FormatManager::GetFormat] Search failed. Giving hardcoded a chance.");
         retval = GetHardcodedFormat(valobj, use_dynamic);
     }
-    else if (valobj_type)
+    
+    if (valobj_type && (!retval || !retval->NonCacheable()))
     {
         if (log)
             log->Printf("[FormatManager::GetFormat] Caching %p for type %s",
@@ -723,7 +721,8 @@ FormatManager::GetSummaryFormat (ValueObject& valobj,
             log->Printf("[FormatManager::GetSummaryFormat] Search failed. Giving hardcoded a chance.");
         retval = GetHardcodedSummaryFormat(valobj, use_dynamic);
     }
-    else if (valobj_type)
+    
+    if (valobj_type && (!retval || !retval->NonCacheable()))
     {
         if (log)
             log->Printf("[FormatManager::GetSummaryFormat] Caching %p for type %s",
@@ -781,7 +780,8 @@ FormatManager::GetSyntheticChildren (ValueObject& valobj,
             log->Printf("[FormatManager::GetSyntheticChildren] Search failed. Giving hardcoded a chance.");
         retval = GetHardcodedSyntheticChildren(valobj, use_dynamic);
     }
-    else if (valobj_type)
+    
+    if (valobj_type && (!retval || !retval->NonCacheable()))
     {
         if (log)
             log->Printf("[FormatManager::GetSyntheticChildren] Caching %p for type %s",
@@ -826,7 +826,8 @@ FormatManager::GetValidator (ValueObject& valobj,
             log->Printf("[FormatManager::GetValidator] Search failed. Giving hardcoded a chance.");
         retval = GetHardcodedValidator(valobj, use_dynamic);
     }
-    else if (valobj_type)
+    
+    if (valobj_type && (!retval || !retval->NonCacheable()))
     {
         if (log)
             log->Printf("[FormatManager::GetValidator] Caching %p for type %s",
@@ -1156,19 +1157,23 @@ FormatManager::LoadSystemFormatters()
     .SetShowMembersOneLiner(false)
     .SetHideItemNames(false);
     
+    TypeSummaryImpl::Flags string_array_flags;
+    string_array_flags.SetCascades(false)
+    .SetSkipPointers(true)
+    .SetSkipReferences(false)
+    .SetDontShowChildren(true)
+    .SetDontShowValue(true)
+    .SetShowMembersOneLiner(false)
+    .SetHideItemNames(false);
+    
     lldb::TypeSummaryImplSP string_format(new StringSummaryFormat(string_flags, "${var%s}"));
     
     
-    lldb::TypeSummaryImplSP string_array_format(new StringSummaryFormat(TypeSummaryImpl::Flags().SetCascades(false)
-                                                                        .SetSkipPointers(true)
-                                                                        .SetSkipReferences(false)
-                                                                        .SetDontShowChildren(true)
-                                                                        .SetDontShowValue(true)
-                                                                        .SetShowMembersOneLiner(false)
-                                                                        .SetHideItemNames(false),
+    lldb::TypeSummaryImplSP string_array_format(new StringSummaryFormat(string_array_flags,
                                                                         "${var%s}"));
     
     lldb::RegularExpressionSP any_size_char_arr(new RegularExpression("char \\[[0-9]+\\]"));
+    lldb::RegularExpressionSP any_size_wchar_arr(new RegularExpression("wchar_t \\[[0-9]+\\]"));
     
     TypeCategoryImpl::SharedPointer sys_category_sp = GetCategory(m_system_category_name);
     
@@ -1194,6 +1199,7 @@ FormatManager::LoadSystemFormatters()
     AddCXXSummary(sys_category_sp, lldb_private::formatters::Char32StringSummaryProvider, "char32_t * summary provider", ConstString("char32_t *"), string_flags);
     
     AddCXXSummary(sys_category_sp, lldb_private::formatters::WCharStringSummaryProvider, "wchar_t * summary provider", ConstString("wchar_t *"), string_flags);
+    AddCXXSummary(sys_category_sp, lldb_private::formatters::WCharStringSummaryProvider, "wchar_t * summary provider", ConstString("wchar_t \\[[0-9]+\\]"), string_array_flags, true);
     
     AddCXXSummary(sys_category_sp, lldb_private::formatters::Char16StringSummaryProvider, "unichar * summary provider", ConstString("unichar *"), string_flags);
     
@@ -1610,7 +1616,7 @@ FormatManager::LoadHardcodedFormatters()
                                          [](lldb_private::ValueObject& valobj,
                                             lldb::DynamicValueType,
                                             FormatManager& fmt_mgr) -> SyntheticChildren::SharedPointer {
-                                             static CXXSyntheticChildren::SharedPointer formatter_sp(new CXXSyntheticChildren(SyntheticChildren::Flags().SetCascades(true).SetSkipPointers(true).SetSkipReferences(true),
+                                             static CXXSyntheticChildren::SharedPointer formatter_sp(new CXXSyntheticChildren(SyntheticChildren::Flags().SetCascades(true).SetSkipPointers(true).SetSkipReferences(true).SetNonCacheable(true),
                                                                                                                               "vector_type synthetic children",
                                                                                                                               lldb_private::formatters::VectorTypeSyntheticFrontEndCreator));
                                              if (valobj.GetClangType().IsVectorType(nullptr, nullptr))
