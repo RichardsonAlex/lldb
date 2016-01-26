@@ -19,6 +19,7 @@
 #include "Plugins/Process/Utility/FreeBSDSignals.h"
 #include "Plugins/Process/Utility/LinuxSignals.h"
 #include "Plugins/Process/Utility/MipsLinuxSignals.h"
+#include "Plugins/Process/Utility/NetBSDSignals.h"
 
 using namespace lldb_private;
 
@@ -63,8 +64,9 @@ UnixSignals::Create(const ArchSpec &arch)
         }
         case llvm::Triple::FreeBSD:
         case llvm::Triple::OpenBSD:
-        case llvm::Triple::NetBSD:
             return std::make_shared<FreeBSDSignals>();
+        case llvm::Triple::NetBSD:
+            return std::make_shared<NetBSDSignals>();
         default:
             return std::make_shared<UnixSignals>();
     }
@@ -178,7 +180,7 @@ UnixSignals::GetShortName(ConstString name) const
 {
     if (name)
     {
-      char* signame = (char*)(name.AsCString());
+      const char* signame = name.AsCString();
       return ConstString(signame + 3); // Remove "SIG" from name
     }
     return name;

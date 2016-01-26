@@ -9,11 +9,14 @@
 
 // C Includes
 #ifndef LLDB_DISABLE_CURSES
-#include <ncurses.h>
+#include <curses.h>
 #include <panel.h>
 #endif
 
 // C++ Includes
+#if defined(__APPLE__)
+#include <deque>
+#endif
 #include <string>
 
 // Other libraries and framework includes
@@ -35,6 +38,8 @@
 #include "lldb/Symbol/Symbol.h"
 #include "lldb/Target/RegisterContext.h"
 #include "lldb/Target/ThreadPlan.h"
+
+
 
 using namespace lldb;
 using namespace lldb_private;
@@ -2209,7 +2214,7 @@ type summary add -s "${var.origin%S} ${var.size%S}" curses::Rect
             {
                 // Run the action on this menu in case we need to populate the
                 // menu with dynamic content and also in case check marks, and
-                // any other menu decorations need to be caclulated
+                // any other menu decorations need to be calculated
                 if (run_menu_sp->Action() == MenuActionResult::Quit)
                     return eQuitApplication;
 
@@ -4102,7 +4107,9 @@ CursesKeyToCString (int ch)
         case KEY_UNDO:      return "undo key";
         case KEY_MOUSE:     return "Mouse event has occurred";
         case KEY_RESIZE:    return "Terminal resize event";
+#ifdef KEY_EVENT
         case KEY_EVENT:     return "We were interrupted by an event";
+#endif
         case KEY_RETURN:    return "return";
         case ' ':           return "space";
         case '\t':          return "tab";

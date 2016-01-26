@@ -12,6 +12,12 @@
 
 // C Includes
 // C++ Includes
+#include <array>
+#include <map>
+#include <memory>
+#include <string>
+#include <vector>
+
 // Other libraries and framework includes
 // Project includes
 #include "lldb/lldb-private.h"
@@ -19,12 +25,8 @@
 #include "lldb/Target/CPPLanguageRuntime.h"
 #include "lldb/Core/Module.h"
 
-#include <array>
-namespace lldb_private
-{
-
-namespace lldb_renderscript
-{
+namespace lldb_private {
+namespace lldb_renderscript {
 
 typedef uint32_t RSSlot;
 class RSModuleDescriptor;
@@ -34,14 +36,14 @@ struct RSKernelDescriptor;
 typedef std::shared_ptr<RSModuleDescriptor> RSModuleDescriptorSP;
 typedef std::shared_ptr<RSGlobalDescriptor> RSGlobalDescriptorSP;
 typedef std::shared_ptr<RSKernelDescriptor> RSKernelDescriptorSP;
+typedef std::array<uint32_t, 3> RSCoordinate;
 
 // Breakpoint Resolvers decide where a breakpoint is placed,
 // so having our own allows us to limit the search scope to RS kernel modules.
 // As well as check for .expand kernels as a fallback.
 class RSBreakpointResolver : public BreakpointResolver
 {
-  public:
-
+public:
     RSBreakpointResolver(Breakpoint *bkpt, ConstString name):
                          BreakpointResolver (bkpt, BreakpointResolver::NameResolver),
                          m_kernel_name(name)
@@ -79,13 +81,13 @@ class RSBreakpointResolver : public BreakpointResolver
         return ret_sp;
     }
 
-  protected:
+protected:
     ConstString m_kernel_name;
 };
 
 struct RSKernelDescriptor
 {
-  public:
+public:
     RSKernelDescriptor(const RSModuleDescriptor *module, const char *name, uint32_t slot)
         : m_module(module)
         , m_name(name)
@@ -102,7 +104,7 @@ struct RSKernelDescriptor
 
 struct RSGlobalDescriptor
 {
-  public:
+public:
     RSGlobalDescriptor(const RSModuleDescriptor *module, const char *name )
         : m_module(module)
         , m_name(name)
@@ -117,13 +119,13 @@ struct RSGlobalDescriptor
 
 class RSModuleDescriptor
 {
-  public:
+public:
     RSModuleDescriptor(const lldb::ModuleSP &module)
         : m_module(module)
     {
     }
 
-    ~RSModuleDescriptor() {}
+    ~RSModuleDescriptor() = default;
 
     bool ParseRSInfo();
 
@@ -136,12 +138,11 @@ class RSModuleDescriptor
     std::string m_resname;
 };
 
-} // end lldb_renderscript namespace
+} // namespace lldb_renderscript
 
 class RenderScriptRuntime : public lldb_private::CPPLanguageRuntime
 {
-  public:
-
+public:
     enum ModuleKind
     {
         eModuleKindIgnored,
@@ -151,7 +152,7 @@ class RenderScriptRuntime : public lldb_private::CPPLanguageRuntime
         eModuleKindKernelObj
     };
 
-    ~RenderScriptRuntime();
+    ~RenderScriptRuntime() override;
 
     //------------------------------------------------------------------
     // Static Functions
@@ -172,26 +173,19 @@ class RenderScriptRuntime : public lldb_private::CPPLanguageRuntime
 
     static void ModulesDidLoad(const lldb::ProcessSP& process_sp, const ModuleList &module_list );
 
-    //------------------------------------------------------------------
-    // PluginInterface protocol
-    //------------------------------------------------------------------
-    virtual lldb_private::ConstString GetPluginName();
+    bool IsVTableName(const char *name) override;
 
-    virtual uint32_t GetPluginVersion();
-
-    virtual bool IsVTableName(const char *name);
-
-    virtual bool GetDynamicTypeAndAddress(ValueObject &in_value, lldb::DynamicValueType use_dynamic,
-                                          TypeAndOrName &class_type_or_name, Address &address,
-                                          Value::ValueType &value_type);
+    bool GetDynamicTypeAndAddress(ValueObject &in_value, lldb::DynamicValueType use_dynamic,
+                                  TypeAndOrName &class_type_or_name, Address &address,
+                                  Value::ValueType &value_type) override;
     
-    virtual TypeAndOrName
-    FixUpDynamicType (const TypeAndOrName& type_and_or_name,
-                      ValueObject& static_value);
+    TypeAndOrName
+    FixUpDynamicType(const TypeAndOrName& type_and_or_name,
+                     ValueObject& static_value) override;
 
-    virtual bool CouldHaveDynamicValue(ValueObject &in_value);
+    bool CouldHaveDynamicValue(ValueObject &in_value) override;
 
-    virtual lldb::BreakpointResolverSP CreateExceptionResolver(Breakpoint *bkpt, bool catch_bp, bool throw_bp);
+    lldb::BreakpointResolverSP CreateExceptionResolver(Breakpoint *bkpt, bool catch_bp, bool throw_bp) override;
 
     bool LoadModule(const lldb::ModuleSP &module_sp);
 
@@ -205,7 +199,8 @@ class RenderScriptRuntime : public lldb_private::CPPLanguageRuntime
 
     bool DumpAllocation(Stream &strm, StackFrame* frame_ptr, const uint32_t id);
 
-    void ListAllocations(Stream &strm, StackFrame* frame_ptr, bool recompute);
+    void
+    ListAllocations(Stream &strm, StackFrame *frame_ptr, const uint32_t index);
 
     void PlaceBreakpointOnKernel(Stream &strm, const char *name, const std::array<int,3> coords,
                                  Error &error, lldb::TargetSP target);
@@ -214,11 +209,7 @@ class RenderScriptRuntime : public lldb_private::CPPLanguageRuntime
 
     void Status(Stream &strm) const;
 
-    virtual size_t GetAlternateManglings(const ConstString &mangled, std::vector<ConstString> &alternates) {
-        return static_cast<size_t>(0);
-    }
-
-    virtual void ModulesDidLoad(const ModuleList &module_list );
+    void ModulesDidLoad(const ModuleList &module_list) override;
 
     bool LoadAllocation(Stream &strm, const uint32_t alloc_id, const char* filename, StackFrame* frame_ptr);
 
@@ -228,10 +219,20 @@ class RenderScriptRuntime : public lldb_private::CPPLanguageRuntime
 
     void Initiate();
 
-  protected:
+    //------------------------------------------------------------------
+    // PluginInterface protocol
+    //------------------------------------------------------------------
+    lldb_private::ConstString GetPluginName() override;
 
+    uint32_t GetPluginVersion() override;
+
+    static bool
+    GetKernelCoordinate(lldb_renderscript::RSCoordinate &coord, Thread *thread_ptr);
+
+protected:
     struct ScriptDetails;
     struct AllocationDetails;
+    struct Element;
 
     void InitSearchFilter(lldb::TargetSP target)
     {
@@ -283,7 +284,7 @@ class RenderScriptRuntime : public lldb_private::CPPLanguageRuntime
 
     std::map<lldb::addr_t, lldb_renderscript::RSModuleDescriptorSP> m_scriptMappings;
     std::map<lldb::addr_t, RuntimeHookSP> m_runtimeHooks;
-    std::map<lldb::user_id_t, std::shared_ptr<int>> m_conditional_breaks;
+    std::map<lldb::user_id_t, std::shared_ptr<uint32_t>> m_conditional_breaks;
 
     lldb::SearchFilterSP m_filtersp; // Needed to create breakpoints through Target API
 
@@ -292,8 +293,10 @@ class RenderScriptRuntime : public lldb_private::CPPLanguageRuntime
     bool m_breakAllKernels;
     static const HookDefn s_runtimeHookDefns[];
     static const size_t s_runtimeHookCount;
+    static const std::string s_runtimeExpandSuffix;
+    static const std::array<const char *, 3> s_runtimeCoordVars;
 
-  private:
+private:
     RenderScriptRuntime(Process *process); // Call CreateInstance instead.
     
     static bool HookCallback(void *baton, StoppointCallbackContext *ctx, lldb::user_id_t break_id,
@@ -308,12 +311,18 @@ class RenderScriptRuntime : public lldb_private::CPPLanguageRuntime
 
     void CaptureScriptInit1(RuntimeHook* hook_info, ExecutionContext& context);
     void CaptureAllocationInit1(RuntimeHook* hook_info, ExecutionContext& context);
+    void CaptureAllocationDestroy(RuntimeHook* hook_info, ExecutionContext& context);
     void CaptureSetGlobalVar1(RuntimeHook* hook_info, ExecutionContext& context);
+    void CaptureScriptInvokeForEachMulti(RuntimeHook* hook_info, ExecutionContext& context);
 
     AllocationDetails* FindAllocByID(Stream &strm, const uint32_t alloc_id);
     std::shared_ptr<uint8_t> GetAllocationData(AllocationDetails* allocation, StackFrame* frame_ptr);
-    unsigned int GetElementSize(const AllocationDetails* allocation);
+    void SetElementSize(Element& elem);
     static bool GetFrameVarAsUnsigned(const lldb::StackFrameSP, const char* var_name, uint64_t& val);
+    void FindStructTypeName(Element& elem, StackFrame* frame_ptr);
+
+    size_t PopulateElementHeaders(const std::shared_ptr<uint8_t> header_buffer, size_t offset, const Element& elem);
+    size_t CalculateElementHeaderSize(const Element& elem);
 
     //
     // Helper functions for jitting the runtime
@@ -325,9 +334,11 @@ class RenderScriptRuntime : public lldb_private::CPPLanguageRuntime
 
     bool JITTypePacked(AllocationDetails* allocation, StackFrame* frame_ptr);
 
-    bool JITElementPacked(AllocationDetails* allocation, StackFrame* frame_ptr);
+    bool JITElementPacked(Element& elem, const lldb::addr_t context, StackFrame* frame_ptr);
 
-    bool JITAllocationSize(AllocationDetails* allocation, StackFrame* frame_ptr, const uint32_t elem_size);
+    bool JITAllocationSize(AllocationDetails* allocation, StackFrame* frame_ptr);
+
+    bool JITSubelements(Element& elem, const lldb::addr_t context, StackFrame* frame_ptr);
 
     bool JITAllocationStride(AllocationDetails* allocation, StackFrame* frame_ptr);
 

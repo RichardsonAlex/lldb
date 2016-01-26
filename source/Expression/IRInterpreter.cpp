@@ -33,6 +33,7 @@
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IR/Operator.h"
 #include "llvm/Support/raw_ostream.h"
 
 #include <map>
@@ -297,7 +298,8 @@ public:
 
                         SmallVector <Value *, 8> indices (op_cursor, op_end);
 
-                        uint64_t offset = m_target_data.getIndexedOffset(base->getType(), indices);
+                        Type *src_elem_ty = cast<GEPOperator>(constant_expr)->getSourceElementType();
+                        uint64_t offset = m_target_data.getIndexedOffsetInType(src_elem_ty, indices);
 
                         const bool is_signed = true;
                         value += APInt(value.getBitWidth(), offset, is_signed);
@@ -365,7 +367,7 @@ public:
 
         const uint64_t *raw_data = resolved_value.getRawData();
 
-        buffer.PutRawBytes(raw_data, constant_size, lldb::endian::InlHostByteOrder());
+        buffer.PutRawBytes(raw_data, constant_size, lldb_private::endian::InlHostByteOrder());
 
         lldb_private::Error write_error;
 
@@ -498,7 +500,7 @@ IRInterpreter::CanInterpret (llvm::Module &module,
             default:
                 {
                     if (log)
-                        log->Printf("Unsupported instruction: %s", PrintValue(ii).c_str());
+                        log->Printf("Unsupported instruction: %s", PrintValue(&*ii).c_str());
                     error.SetErrorToGenericError();
                     error.SetErrorString(unsupported_opcode_error);
                     return false;
@@ -522,7 +524,7 @@ IRInterpreter::CanInterpret (llvm::Module &module,
                     if (!CanIgnoreCall(call_inst) && !support_function_calls)
                     {
                         if (log)
-                            log->Printf("Unsupported instruction: %s", PrintValue(ii).c_str());
+                            log->Printf("Unsupported instruction: %s", PrintValue(&*ii).c_str());
                         error.SetErrorToGenericError();
                         error.SetErrorString(unsupported_opcode_error);
                         return false;
@@ -547,7 +549,7 @@ IRInterpreter::CanInterpret (llvm::Module &module,
                     default:
                     {
                         if (log)
-                            log->Printf("Unsupported ICmp predicate: %s", PrintValue(ii).c_str());
+                            log->Printf("Unsupported ICmp predicate: %s", PrintValue(&*ii).c_str());
 
                         error.SetErrorToGenericError();
                         error.SetErrorString(unsupported_opcode_error);
@@ -663,16 +665,16 @@ IRInterpreter::Interpret (llvm::Module &module,
 
         lldb::addr_t ptr = args[arg_index];
 
-        frame.MakeArgument(ai, ptr);
+        frame.MakeArgument(&*ai, ptr);
     }
 
     uint32_t num_insts = 0;
 
-    frame.Jump(function.begin());
+    frame.Jump(&function.front());
 
     while (frame.m_ii != frame.m_ie && (++num_insts < 4096))
     {
-        const Instruction *inst = frame.m_ii;
+        const Instruction *inst = &*frame.m_ii;
 
         if (log)
             log->Printf("Interpreting %s", PrintValue(inst).c_str());
@@ -999,7 +1001,7 @@ IRInterpreter::Interpret (llvm::Module &module,
                 }
 
                 const Value *pointer_operand = gep_inst->getPointerOperand();
-                Type *pointer_type = pointer_operand->getType();
+                Type *src_elem_ty = gep_inst->getSourceElementType();
 
                 lldb_private::Scalar P;
 
@@ -1048,7 +1050,7 @@ IRInterpreter::Interpret (llvm::Module &module,
                     const_indices.push_back(constant_index);
                 }
 
-                uint64_t offset = data_layout.getIndexedOffset(pointer_type, const_indices);
+                uint64_t offset = data_layout.getIndexedOffsetInType(src_elem_ty, const_indices);
 
                 lldb_private::Scalar Poffset = P + offset;
 
